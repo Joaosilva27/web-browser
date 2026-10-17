@@ -1,0 +1,15 @@
+# Build outputs
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+
+# User data
+*.user
+*.suo
+
+# System files
+Thumbs.db
+Desktop.ini
+.DS_Store
