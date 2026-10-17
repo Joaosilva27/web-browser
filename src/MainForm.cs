@@ -22,14 +22,7 @@ namespace SimpleBrowser
         private const int HTBOTTOM = 15;
         private const int HTBOTTOMLEFT = 16;
         private const int HTBOTTOMRIGHT = 17;
-        private const int HTCAPTION = 2;
-        private const int WM_NCLBUTTONDOWN = 0xA1;
-        private const int BorderResizeMargin = 7;
-
-        [DllImport("user32.dll")]
-        public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
-        [DllImport("user32.dll")]
-        public static extern bool ReleaseCapture();
+        private const int BorderResizeMargin = 6;
 
         private WebView2 _chromeWebView;
         private Panel _contentPanel;
@@ -51,24 +44,25 @@ namespace SimpleBrowser
 
         private void InitializeWindow()
         {
+            Text = "Brave";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(1300, 840);
+            Size = new Size(1280, 820);
             MinimumSize = new Size(600, 400);
-            BackColor = Color.FromArgb(9, 10, 15);
+            BackColor = Color.FromArgb(30, 32, 41);
             DoubleBuffered = true;
             SetStyle(ControlStyles.ResizeRedraw, true);
 
-            // Top Chrome WebView2 Container (Height: 90)
+            // Top Chrome WebView2 Container (Height: 110 for exact Brave tabstrip + toolbar + bookmarks bar)
             _chromeWebView = new WebView2();
             _chromeWebView.Dock = DockStyle.Top;
-            _chromeWebView.Height = 90;
-            _chromeWebView.DefaultBackgroundColor = Color.FromArgb(9, 10, 15);
+            _chromeWebView.Height = 110;
+            _chromeWebView.DefaultBackgroundColor = Color.FromArgb(30, 32, 41);
 
             // Main Content Area
             _contentPanel = new Panel();
             _contentPanel.Dock = DockStyle.Fill;
-            _contentPanel.BackColor = Color.FromArgb(7, 8, 11);
+            _contentPanel.BackColor = Color.FromArgb(17, 16, 25);
 
             _tabControl = new TabControl();
             _tabControl.Dock = DockStyle.Fill;
@@ -86,17 +80,12 @@ namespace SimpleBrowser
             Controls.Add(_contentPanel);
             Controls.Add(_chromeWebView);
 
-            // Specular border
+            // Subtle border
             Paint += (s, e) =>
             {
-                using (var pen = new Pen(Color.FromArgb(35, 40, 58), 1))
+                using (var pen = new Pen(Color.FromArgb(50, 53, 68), 1))
                 {
                     e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-                }
-                // Subtle cyan accent on top left
-                using (var pen = new Pen(Color.FromArgb(0, 242, 254), 1.5f))
-                {
-                    e.Graphics.DrawLine(pen, 0, 0, 60, 0);
                 }
             };
         }
@@ -105,7 +94,7 @@ namespace SimpleBrowser
         {
             try
             {
-                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AetherBrowser", "ChromeProfile");
+                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser", "BraveChromeProfile");
                 if (!Directory.Exists(userDataFolder))
                 {
                     Directory.CreateDirectory(userDataFolder);
@@ -129,7 +118,7 @@ namespace SimpleBrowser
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error initializing Aether Chrome: " + ex.Message, "Aether Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Error initializing Brave Chrome: " + ex.Message, "Brave Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -140,7 +129,6 @@ namespace SimpleBrowser
                 string json = e.WebMessageAsJson;
                 if (string.IsNullOrEmpty(json)) return;
 
-                // Simple JSON field extractor
                 string action = ExtractJsonField(json, "action");
                 if (string.IsNullOrEmpty(action)) return;
 
@@ -198,16 +186,16 @@ namespace SimpleBrowser
                         ShowPageSource();
                         break;
                     case "shield":
-                        ShowAetherShield();
+                        ShowBraveShields();
                         break;
                     case "menu":
-                        ShowAetherMenu();
+                        ShowBraveMenu();
                         break;
                 }
             }
             catch
             {
-                // Ignore message parse errors silently
+                // Ignore parse errors
             }
         }
 
@@ -271,7 +259,6 @@ namespace SimpleBrowser
             SyncBookmarked();
         }
 
-        // Real-time synchronization to HTML Chrome
         private void SyncAllToChrome()
         {
             SyncTabs();
@@ -295,7 +282,7 @@ namespace SimpleBrowser
             int activeIndex = _tabControl.SelectedIndex;
 
             _chromeWebView.CoreWebView2.ExecuteScriptAsync(
-                string.Format("window.AetherAPI && window.AetherAPI.renderTabs({0}, {1});", json, activeIndex));
+                string.Format("window.BraveAPI && window.BraveAPI.renderTabs({0}, {1});", json, activeIndex));
         }
 
         private void SyncUrl()
@@ -303,7 +290,7 @@ namespace SimpleBrowser
             if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
             _chromeWebView.CoreWebView2.ExecuteScriptAsync(
-                string.Format("window.AetherAPI && window.AetherAPI.setUrl('{0}');", EscapeJs(url ?? "")));
+                string.Format("window.BraveAPI && window.BraveAPI.setUrl('{0}');", EscapeJs(url ?? "")));
         }
 
         private void SyncNavState()
@@ -312,7 +299,7 @@ namespace SimpleBrowser
             bool canBack = ActiveTab != null && ActiveTab.CanGoBack;
             bool canForward = ActiveTab != null && ActiveTab.CanGoForward;
             _chromeWebView.CoreWebView2.ExecuteScriptAsync(
-                string.Format("window.AetherAPI && window.AetherAPI.setNavState({0}, {1});", canBack ? "true" : "false", canForward ? "true" : "false"));
+                string.Format("window.BraveAPI && window.BraveAPI.setNavState({0}, {1});", canBack ? "true" : "false", canForward ? "true" : "false"));
         }
 
         private void SyncBookmarked()
@@ -321,7 +308,7 @@ namespace SimpleBrowser
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
             bool isBookmarked = !string.IsNullOrEmpty(url) && _bookmarkManager.IsBookmarked(url);
             _chromeWebView.CoreWebView2.ExecuteScriptAsync(
-                string.Format("window.AetherAPI && window.AetherAPI.setBookmarked({0});", isBookmarked ? "true" : "false"));
+                string.Format("window.BraveAPI && window.BraveAPI.setBookmarked({0});", isBookmarked ? "true" : "false"));
         }
 
         private void OnTabUrlChanged(BrowserTab tab, string url)
@@ -350,11 +337,11 @@ namespace SimpleBrowser
             }
         }
 
-        private void ShowAetherShield()
+        private void ShowBraveShields()
         {
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
-            var shield = new AetherShieldForm(url);
-            shield.Location = new Point(Math.Max(10, Right - 360), Top + 95);
+            var shield = new BraveShieldsForm(url);
+            shield.Location = new Point(Math.Max(10, Right - 350), Top + 80);
             shield.Show(this);
         }
 
@@ -384,25 +371,24 @@ namespace SimpleBrowser
             }
         }
 
-        private void ShowAetherMenu()
+        private void ShowBraveMenu()
         {
             var menu = new ContextMenuStrip();
-            menu.BackColor = Color.FromArgb(14, 16, 24);
+            menu.BackColor = Color.FromArgb(30, 32, 41);
             menu.ForeColor = Color.White;
 
-            var newTabItem = new ToolStripMenuItem("New Pill Tab\t⌘T", null, delegate { AddNewTab(); });
-            var bookmarksItem = new ToolStripMenuItem("Bookmark Page\t⌘D", null, delegate { ToggleBookmarkCurrent(); });
-            var historyItem = new ToolStripMenuItem("Browsing History\t⌘H", null, delegate { ShowHistory(); });
-            var sourceItem = new ToolStripMenuItem("Inspect Source\t⌘U", null, delegate { ShowPageSource(); });
-            var shieldItem = new ToolStripMenuItem("✦ Aether Quantum Shield...", null, delegate { ShowAetherShield(); });
-            var aboutItem = new ToolStripMenuItem("About Aether Browser 2026...", null, delegate
+            var newTabItem = new ToolStripMenuItem("New Tab\tCtrl+T", null, delegate { AddNewTab(); });
+            var bookmarksItem = new ToolStripMenuItem("Bookmark Page\tCtrl+D", null, delegate { ToggleBookmarkCurrent(); });
+            var historyItem = new ToolStripMenuItem("History\tCtrl+H", null, delegate { ShowHistory(); });
+            var sourceItem = new ToolStripMenuItem("View Page Source\tCtrl+U", null, delegate { ShowPageSource(); });
+            var shieldItem = new ToolStripMenuItem("🦁 Brave Shields...", null, delegate { ShowBraveShields(); });
+            var aboutItem = new ToolStripMenuItem("About Brave Browser Edition...", null, delegate
             {
                 MessageBox.Show(
-                    "Aether Browser 2026 Edition\n\n" +
-                    "A 2026 next-generation web browser combining Apple VisionOS frosted glass, " +
-                    "floating capsule tabs, Command Center (⌘K), and Edge Chromium 155.\n\n" +
-                    "Zero clunky legacy Windows chrome. Pure speed and focus.",
-                    "About Aether 2026",
+                    "Brave Browser Desktop Edition\n\n" +
+                    "Exact Brave Browser UI, Brave Shields, Brave Search, and Edge Chromium engine.\n\n" +
+                    "Version 1.0 (Official UI Replica)",
+                    "About Brave",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             });
@@ -415,10 +401,10 @@ namespace SimpleBrowser
             menu.Items.Add(shieldItem);
             menu.Items.Add(aboutItem);
 
-            menu.Show(PointToScreen(new Point(Width - 180, 85)));
+            menu.Show(PointToScreen(new Point(Width - 190, 80)));
         }
 
-        // Native Frameless Resizing & Dragging
+        // Native Resizing
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WM_NCHITTEST)

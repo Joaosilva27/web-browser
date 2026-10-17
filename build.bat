@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ============================================
-echo   Building Aether Quantum Browser...
+echo   Building Brave Browser Desktop...
 echo ============================================
 
 if not exist bin mkdir bin

@@ -11,31 +11,31 @@ namespace SimpleBrowser
 <head>
     <meta charset='utf-8' />
     <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-    <title>Aether Chrome</title>
+    <title>Brave Chrome</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 
         :root {
-            --bg-glass: rgba(10, 12, 18, 0.85);
-            --border-glass: rgba(255, 255, 255, 0.09);
-            --accent-cyan: #00f2fe;
-            --accent-purple: #9d4edd;
-            --text-primary: #f5f5f7;
-            --text-muted: #86868b;
-            --pill-bg: rgba(255, 255, 255, 0.05);
-            --pill-hover: rgba(255, 255, 255, 0.1);
-            --pill-active: rgba(255, 255, 255, 0.12);
+            --bg-tabstrip: #1e2029;
+            --bg-toolbar: #282b36;
+            --bg-omnibox: #1e2029;
+            --border-omnibox: #393c4a;
+            --brave-orange: #fb542b;
+            --brave-orange-hover: #ff6a45;
+            --text-primary: #ffffff;
+            --text-muted: #9fa4b2;
+            --tab-inactive: #1e2029;
+            --tab-hover: #242732;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable', Roboto, sans-serif;
-            background: linear-gradient(180deg, #090a0f 0%, #0d0f16 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-tabstrip);
             color: var(--text-primary);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
         }
 
         /* Drag region */
@@ -46,94 +46,65 @@ namespace SimpleBrowser
             -webkit-app-region: no-drag;
         }
 
-        /* ROW 1: Window Controls + Floating Tabs */
+        /* ROW 1: Tabs + Windows Caption Controls */
         .top-row {
-            height: 42px;
+            height: 38px;
             display: flex;
-            align-items: center;
-            padding: 0 12px;
-            gap: 12px;
+            align-items: flex-end;
+            background: var(--bg-tabstrip);
+            padding-left: 8px;
             position: relative;
         }
 
-        /* Apple Traffic Lights */
-        .traffic-lights {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            padding-right: 6px;
-        }
-        .traffic-btn {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            outline: none;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 8px;
-            font-weight: bold;
-            color: rgba(0, 0, 0, 0.6);
-            transition: transform 0.15s, opacity 0.15s;
-        }
-        .traffic-btn span { opacity: 0; transition: opacity 0.15s; }
-        .traffic-lights:hover .traffic-btn span { opacity: 1; }
-        .traffic-close { background: #ff5f56; box-shadow: 0 0 6px rgba(255, 95, 86, 0.4); }
-        .traffic-min { background: #ffbd2e; box-shadow: 0 0 6px rgba(255, 189, 46, 0.4); }
-        .traffic-max { background: #27c93f; box-shadow: 0 0 6px rgba(39, 201, 63, 0.4); }
-        .traffic-btn:active { transform: scale(0.9); }
-
-        /* Floating Pill Tabs Strip */
+        /* Brave Tabs */
         .tabs-container {
             display: flex;
-            align-items: center;
-            gap: 6px;
+            align-items: flex-end;
+            gap: 2px;
             flex: 1;
+            height: 100%;
             overflow-x: auto;
             scrollbar-width: none;
-            padding: 2px 0;
         }
         .tabs-container::-webkit-scrollbar { display: none; }
 
-        .tab-pill {
+        .tab {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 14px;
-            border-radius: 18px;
-            background: var(--pill-bg);
-            border: 1px solid var(--border-glass);
-            font-size: 12.5px;
+            padding: 0 12px;
+            height: 34px;
+            background: var(--tab-inactive);
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            font-size: 12px;
             color: var(--text-muted);
             cursor: pointer;
-            max-width: 200px;
-            min-width: 110px;
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 220px;
+            min-width: 140px;
             position: relative;
+            border-top: 2px solid transparent;
+            transition: background 0.15s, color 0.15s;
         }
-        .tab-pill:hover {
-            background: var(--pill-hover);
+        .tab:hover {
+            background: var(--tab-hover);
             color: var(--text-primary);
         }
-        .tab-pill.active {
-            background: var(--pill-active);
-            border-color: rgba(0, 242, 254, 0.45);
+        .tab.active {
+            background: var(--bg-toolbar);
             color: #ffffff;
-            box-shadow: 0 0 16px rgba(0, 242, 254, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            border-top: 2px solid var(--brave-orange);
+            font-weight: 500;
         }
         .tab-icon {
-            font-size: 11px;
-            color: var(--accent-cyan);
+            font-size: 12px;
+            color: var(--brave-orange);
         }
         .tab-title {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             flex: 1;
-            font-weight: 500;
         }
         .tab-close {
             width: 16px;
@@ -142,337 +113,295 @@ namespace SimpleBrowser
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9px;
+            font-size: 10px;
             color: var(--text-muted);
-            opacity: 0.6;
-            transition: all 0.15s;
+            transition: background 0.15s, color 0.15s;
         }
         .tab-close:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
-            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
         }
 
         .new-tab-btn {
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            background: var(--pill-bg);
-            border: 1px solid var(--border-glass);
             color: var(--text-muted);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
+            font-size: 16px;
+            margin-bottom: 3px;
+            margin-left: 4px;
+            transition: background 0.15s, color 0.15s;
         }
         .new-tab-btn:hover {
-            background: var(--pill-hover);
-            border-color: var(--accent-cyan);
-            color: var(--accent-cyan);
-            transform: scale(1.08);
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
         }
 
-        .brand-badge {
-            font-size: 11px;
-            letter-spacing: 1.5px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.35);
-            padding: 0 8px;
+        /* Windows 10/11 Caption Controls */
+        .window-controls {
+            display: flex;
+            height: 100%;
+            margin-left: auto;
         }
-
-        /* ROW 2: Navigation & Omnibar */
-        .bottom-row {
-            height: 48px;
+        .caption-btn {
+            width: 46px;
+            height: 38px;
             display: flex;
             align-items: center;
-            padding: 0 12px;
-            gap: 10px;
-        }
-
-        .nav-group {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .icon-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
+            justify-content: center;
             background: transparent;
             border: none;
             color: var(--text-muted);
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .caption-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+        .caption-btn.btn-close:hover {
+            background: #e81123;
+            color: #ffffff;
+        }
+
+        /* ROW 2: Navigation Toolbar & Omnibox */
+        .toolbar-row {
+            height: 44px;
+            background: var(--bg-toolbar);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .nav-buttons {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        .nav-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: #d1d5db;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.2s;
+            transition: background 0.15s;
         }
-        .icon-btn:hover {
-            background: var(--pill-hover);
-            color: #ffffff;
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
         }
-        .icon-btn:disabled {
+        .nav-btn:disabled {
             opacity: 0.3;
             cursor: default;
         }
 
-        /* Center Floating Omnibar */
-        .omnibar-wrapper {
+        /* Exact Brave Omnibox */
+        .omnibox-container {
             flex: 1;
-            max-width: 720px;
-            margin: 0 auto;
             position: relative;
         }
-        .omnibar {
+        .omnibox {
             display: flex;
             align-items: center;
-            background: rgba(14, 16, 24, 0.85);
-            border: 1px solid var(--border-glass);
-            border-radius: 22px;
-            padding: 4px 14px;
+            background: var(--bg-omnibox);
+            border: 1px solid var(--border-omnibox);
+            border-radius: 18px;
+            height: 32px;
+            padding: 0 12px;
             gap: 8px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(20px);
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .omnibar:hover {
-            border-color: rgba(0, 242, 254, 0.35);
+        .omnibox:focus-within {
+            border-color: var(--brave-orange);
+            box-shadow: 0 0 0 1px var(--brave-orange);
         }
-        .omnibar:focus-within {
-            border-color: var(--accent-cyan);
-            background: rgba(18, 21, 32, 0.95);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 242, 254, 0.2);
-            transform: scale(1.008);
-        }
-        .omnibar-star {
-            color: var(--accent-cyan);
-            font-size: 13px;
+        .lock-icon {
+            font-size: 11px;
+            color: #9fa4b2;
         }
         .url-input {
             flex: 1;
             background: transparent;
             border: none;
             outline: none;
-            color: var(--text-primary);
-            font-size: 13.5px;
+            color: #ffffff;
+            font-size: 13px;
             font-family: inherit;
-            font-weight: 400;
         }
         .url-input::placeholder {
-            color: #555866;
+            color: #6b7280;
         }
-        .cmd-hint {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 2px 7px;
-            border-radius: 6px;
-            font-size: 10px;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .cmd-hint:hover {
-            background: var(--accent-cyan);
-            color: #000;
-            border-color: var(--accent-cyan);
-        }
-
-        .star-btn {
+        .bookmark-btn {
             font-size: 13px;
             color: var(--text-muted);
             cursor: pointer;
-            padding: 0 4px;
             transition: color 0.15s;
         }
-        .star-btn.active {
-            color: #ffd166;
-            text-shadow: 0 0 8px rgba(255, 209, 102, 0.5);
+        .bookmark-btn.active {
+            color: var(--brave-orange);
         }
 
-        /* Right Actions */
-        .right-group {
+        /* Exact Brave Action Buttons (Shields Lion, Rewards, History, Menu) */
+        .actions-group {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
-        .shield-pill {
+        .shields-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            border-radius: 16px;
-            background: rgba(0, 242, 254, 0.08);
-            border: 1px solid rgba(0, 242, 254, 0.25);
-            font-size: 11.5px;
-            color: var(--accent-cyan);
-            font-weight: 600;
+            gap: 4px;
+            background: rgba(251, 84, 43, 0.15);
+            border: 1px solid rgba(251, 84, 43, 0.4);
+            border-radius: 14px;
+            padding: 3px 8px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: background 0.15s;
         }
-        .shield-pill:hover {
-            background: rgba(0, 242, 254, 0.16);
-            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+        .shields-btn:hover {
+            background: rgba(251, 84, 43, 0.28);
         }
-
-        /* COMMAND PALETTE MODAL (Ctrl+K) */
-        .palette-backdrop {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.65);
-            backdrop-filter: blur(16px);
-            z-index: 100;
-            align-items: flex-start;
-            justify-content: center;
-            padding-top: 12px;
-        }
-        .palette-backdrop.open { display: flex; }
-
-        .palette-box {
-            width: 560px;
-            background: #11131c;
-            border: 1px solid rgba(0, 242, 254, 0.35);
-            border-radius: 16px;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 242, 254, 0.2);
-            overflow: hidden;
-            animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes slideDown {
-            from { transform: translateY(-16px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        .palette-search {
-            width: 100%;
-            padding: 14px 18px;
-            background: transparent;
-            border: none;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            color: #fff;
-            font-size: 15px;
-            outline: none;
-            font-family: inherit;
-        }
-        .palette-items {
-            max-height: 280px;
-            overflow-y: auto;
-            padding: 8px;
-        }
-        .palette-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 13.5px;
-            color: var(--text-primary);
-            transition: all 0.15s;
-        }
-        .palette-item:hover, .palette-item.selected {
-            background: rgba(0, 242, 254, 0.15);
-            color: #ffffff;
-        }
-        .palette-item-icon {
-            color: var(--accent-cyan);
+        .shields-lion {
             font-size: 14px;
         }
-        .palette-item-desc {
-            margin-left: auto;
+        .shields-count {
             font-size: 11px;
-            color: var(--text-muted);
+            font-weight: 700;
+            color: var(--brave-orange);
+        }
+
+        .rewards-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: #ff542b;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .rewards-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* ROW 3: Bookmarks Bar */
+        .bookmarks-row {
+            height: 28px;
+            background: #20222c;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+        }
+        .bookmark-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11.5px;
+            color: #d1d5db;
+            text-decoration: none;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }
+        .bookmark-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+        .bm-icon {
+            font-size: 11px;
         }
     </style>
 </head>
 <body class='drag-region'>
 
-    <!-- ROW 1: Traffic Lights + Tabs -->
+    <!-- ROW 1: Tabs + Windows Caption Controls -->
     <div class='top-row'>
-        <div class='traffic-lights no-drag'>
-            <button class='traffic-btn traffic-close' title='Close Window' onclick='sendMsg(""window_close"")'><span>✕</span></button>
-            <button class='traffic-btn traffic-min' title='Minimize' onclick='sendMsg(""window_min"")'><span>–</span></button>
-            <button class='traffic-btn traffic-max' title='Maximize' onclick='sendMsg(""window_max"")'><span>+</span></button>
-        </div>
-
         <div class='tabs-container no-drag' id='tabs-container'>
-            <!-- Dynamic tabs inserted here -->
+            <!-- Injected dynamically -->
         </div>
 
-        <div class='new-tab-btn no-drag' title='New Pill Tab (⌘T)' onclick='sendMsg(""new_tab"")'>+</div>
+        <div class='new-tab-btn no-drag' title='New Tab (Ctrl+T)' onclick='sendMsg(""new_tab"")'>+</div>
 
-        <div class='brand-badge'>AETHER</div>
-    </div>
-
-    <!-- ROW 2: Navigation & Omnibar -->
-    <div class='bottom-row no-drag'>
-        <div class='nav-group'>
-            <button class='icon-btn' id='btn-back' title='Back (Alt+Left)' onclick='sendMsg(""back"")'>‹</button>
-            <button class='icon-btn' id='btn-forward' title='Forward (Alt+Right)' onclick='sendMsg(""forward"")'>›</button>
-            <button class='icon-btn' id='btn-reload' title='Reload (Ctrl+R)' onclick='sendMsg(""reload"")'>⟳</button>
-            <button class='icon-btn' id='btn-home' title='Start Page' onclick='sendMsg(""home"")'>⌂</button>
-        </div>
-
-        <div class='omnibar-wrapper'>
-            <div class='omnibar'>
-                <span class='omnibar-star'>✦</span>
-                <input class='url-input' id='url-input' type='text' placeholder='Search with Google or enter address...' spellcheck='false' />
-                <span class='star-btn' id='btn-star' title='Bookmark (⌘D)' onclick='sendMsg(""bookmark"")'>★</span>
-                <div class='cmd-hint' onclick='openPalette()'>⌘K</div>
-            </div>
-        </div>
-
-        <div class='right-group'>
-            <div class='shield-pill' title='Aether Quantum Shield Telemetry' onclick='sendMsg(""shield"")'>
-                <span>✦</span>
-                <span>Shield ON</span>
-            </div>
-            <button class='icon-btn' title='History (⌘H)' onclick='sendMsg(""history"")'>🕒</button>
-            <button class='icon-btn' title='Source Inspector (⌘U)' onclick='sendMsg(""source"")'>⌥</button>
-            <button class='icon-btn' title='Aether Menu' onclick='sendMsg(""menu"")'>•••</button>
+        <div class='window-controls no-drag'>
+            <button class='caption-btn' title='Minimize' onclick='sendMsg(""window_min"")'>&#x2212;</button>
+            <button class='caption-btn' title='Maximize' onclick='sendMsg(""window_max"")'>&#x25A2;</button>
+            <button class='caption-btn btn-close' title='Close' onclick='sendMsg(""window_close"")'>&#x2715;</button>
         </div>
     </div>
 
-    <!-- COMMAND PALETTE MODAL -->
-    <div class='palette-backdrop no-drag' id='palette' onclick='closePalette(event)'>
-        <div class='palette-box' onclick='event.stopPropagation()'>
-            <input class='palette-search' id='palette-search' placeholder='Type a command or search query...' />
-            <div class='palette-items' id='palette-items'>
-                <div class='palette-item selected' onclick='runPaletteAction(""new_tab"")'>
-                    <span class='palette-item-icon'>➕</span>
-                    <span>Create New Pill Tab</span>
-                    <span class='palette-item-desc'>⌘T</span>
-                </div>
-                <div class='palette-item' onclick='runPaletteAction(""home"")'>
-                    <span class='palette-item-icon'>🌌</span>
-                    <span>Open VisionOS Cosmic Start Page</span>
-                    <span class='palette-item-desc'>Home</span>
-                </div>
-                <div class='palette-item' onclick='runPaletteAction(""history"")'>
-                    <span class='palette-item-icon'>🕒</span>
-                    <span>View Browsing History &amp; Cache</span>
-                    <span class='palette-item-desc'>⌘H</span>
-                </div>
-                <div class='palette-item' onclick='runPaletteAction(""bookmark"")'>
-                    <span class='palette-item-icon'>⭐</span>
-                    <span>Bookmark Current Session</span>
-                    <span class='palette-item-desc'>⌘D</span>
-                </div>
-                <div class='palette-item' onclick='runPaletteAction(""shield"")'>
-                    <span class='palette-item-icon'>✦</span>
-                    <span>Open Aether Quantum Shield Telemetry</span>
-                    <span class='palette-item-desc'>Security</span>
-                </div>
-                <div class='palette-item' onclick='runPaletteAction(""source"")'>
-                    <span class='palette-item-icon'>⌥</span>
-                    <span>Inspect Raw Page Source Code</span>
-                    <span class='palette-item-desc'>⌘U</span>
-                </div>
+    <!-- ROW 2: Navigation Toolbar & Omnibox -->
+    <div class='toolbar-row no-drag'>
+        <div class='nav-buttons'>
+            <button class='nav-btn' id='btn-back' title='Click to go back (Alt+Left)' onclick='sendMsg(""back"")'>&larr;</button>
+            <button class='nav-btn' id='btn-forward' title='Click to go forward (Alt+Right)' onclick='sendMsg(""forward"")'>&rarr;</button>
+            <button class='nav-btn' id='btn-reload' title='Reload this page (Ctrl+R)' onclick='sendMsg(""reload"")'>&#x21BB;</button>
+            <button class='nav-btn' id='btn-home' title='Open homepage' onclick='sendMsg(""home"")'>&#x2302;</button>
+        </div>
+
+        <div class='omnibox-container'>
+            <div class='omnibox'>
+                <span class='lock-icon'>🔒</span>
+                <input class='url-input' id='url-input' type='text' placeholder='Search with Brave or enter address' spellcheck='false' />
+                <span class='bookmark-btn' id='btn-star' title='Bookmark this tab (Ctrl+D)' onclick='sendMsg(""bookmark"")'>★</span>
             </div>
+        </div>
+
+        <div class='actions-group'>
+            <div class='shields-btn' title='Brave Shields' onclick='sendMsg(""shield"")'>
+                <span class='shields-lion'>🦁</span>
+                <span class='shields-count'>14</span>
+            </div>
+            <button class='rewards-btn' title='Brave Rewards' onclick='sendMsg(""shield"")'>▲</button>
+            <button class='nav-btn' title='History (Ctrl+H)' onclick='sendMsg(""history"")'>🕒</button>
+            <button class='nav-btn' title='Source Code (Ctrl+U)' onclick='sendMsg(""source"")'>&lt;/&gt;</button>
+            <button class='nav-btn' title='Customize and control Brave' onclick='sendMsg(""menu"")'>&#x2630;</button>
+        </div>
+    </div>
+
+    <!-- ROW 3: Bookmarks Bar -->
+    <div class='bookmarks-row no-drag'>
+        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://search.brave.com"" })'>
+            <span class='bm-icon'>🦁</span>
+            <span>Brave Search</span>
+        </div>
+        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://github.com"" })'>
+            <span class='bm-icon'>🐙</span>
+            <span>GitHub</span>
+        </div>
+        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://youtube.com"" })'>
+            <span class='bm-icon'>▶️</span>
+            <span>YouTube</span>
+        </div>
+        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://reddit.com"" })'>
+            <span class='bm-icon'>💬</span>
+            <span>Reddit</span>
+        </div>
+        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://wikipedia.org"" })'>
+            <span class='bm-icon'>📚</span>
+            <span>Wikipedia</span>
+        </div>
+        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://news.ycombinator.com"" })'>
+            <span class='bm-icon'>⚡</span>
+            <span>Hacker News</span>
         </div>
     </div>
 
@@ -493,54 +422,19 @@ namespace SimpleBrowser
             urlInput.select();
         });
 
-        // Command Palette
-        var palette = document.getElementById('palette');
-        var paletteSearch = document.getElementById('palette-search');
-        function openPalette() {
-            palette.classList.add('open');
-            paletteSearch.value = '';
-            paletteSearch.focus();
-        }
-        function closePalette(e) {
-            palette.classList.remove('open');
-        }
-        function runPaletteAction(action) {
-            closePalette();
-            sendMsg(action);
-        }
-
-        paletteSearch.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closePalette();
-            } else if (e.key === 'Enter') {
-                var query = paletteSearch.value.trim();
-                if (query) {
-                    closePalette();
-                    sendMsg('navigate', { url: query });
-                }
-            }
-        });
-
-        window.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                e.preventDefault();
-                openPalette();
-            }
-        });
-
-        // Global Aether API callable from C#
-        window.AetherAPI = {
+        // Global API called by C#
+        window.BraveAPI = {
             renderTabs: function(tabs, activeIndex) {
                 var container = document.getElementById('tabs-container');
                 container.innerHTML = '';
                 tabs.forEach(function(tab, index) {
-                    var pill = document.createElement('div');
-                    pill.className = 'tab-pill' + (index === activeIndex ? ' active' : '');
-                    pill.onclick = function() { sendMsg('switch_tab', { index: index }); };
+                    var tabEl = document.createElement('div');
+                    tabEl.className = 'tab' + (index === activeIndex ? ' active' : '');
+                    tabEl.onclick = function() { sendMsg('switch_tab', { index: index }); };
 
                     var icon = document.createElement('span');
                     icon.className = 'tab-icon';
-                    icon.innerText = (index === activeIndex ? '✦' : '○');
+                    icon.innerText = '🦁';
 
                     var title = document.createElement('span');
                     title.className = 'tab-title';
@@ -554,10 +448,10 @@ namespace SimpleBrowser
                         sendMsg('close_tab', { index: index });
                     };
 
-                    pill.appendChild(icon);
-                    pill.appendChild(title);
-                    pill.appendChild(close);
-                    container.appendChild(pill);
+                    tabEl.appendChild(icon);
+                    tabEl.appendChild(title);
+                    tabEl.appendChild(close);
+                    container.appendChild(tabEl);
                 });
             },
             setUrl: function(url) {

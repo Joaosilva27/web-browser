@@ -1,38 +1,39 @@
-# AETHER ✦
+# Brave Browser Desktop Edition 🦁
 
-> **The Quantum Minimalist Web Browser**  
-> Designed with Cupertino Simplicity, Futuristic Precision, and Zero Footprint.
-
-Aether is a fast, standalone desktop web browser built from scratch in C# with an Apple-inspired futuristic interface (VisionOS-style frosted glass, floating pill tabs, ambient cosmic start page, and Cupertino typography). Powered under the hood by modern Microsoft Edge Chromium 155.
+An exact desktop replica of the **Brave Browser** UI, built from scratch in C# and powered by Edge Chromium 155.
 
 ---
 
-## ✦ Design Philosophy & Features
+## 🦁 Exact Brave Browser UI Features
 
-- **🍎 Apple-Inspired Human Interface**:
-  - **VisionOS Floating Pill Tabs**: Rounded capsule tabs with active frosted glass illumination, smooth circular close buttons (`✕`), and dynamic title truncation.
-  - **Floating Omnibar**: A centered frosted glass pill with specular border highlights, security indicator (`✦`), and ambient cyan glow on focus.
-  - **Minimalist Iconography**: Clean Apple-style chevrons (`‹`, `›`), reload (`⟳`), start page (`⌂`), star bookmark (`★`), and triple-dot menu (`•••`).
-  - **Deep Obsidian Palette**: Ultra-refined dark tones (`#07080B`, `#0A0B10`, `#11131C`) with ethereal cyan (`#00F2FE`) and ultraviolet (`#9D4EDD`) ambient lighting.
+- **Exact Brave Tab Strip & Colors**:
+  - Dark bluish-slate theme palette (`#1E2029` tab strip, `#282B36` toolbar).
+  - Brave trapezoid-style tabs with the signature **Brave Orange** (`#FB542B`) accent line on the active tab.
+  - New tab button (`+`) placed directly next to the tabs.
+  - Windows caption buttons (`–`, `□`, `✕`) on the top-right.
 
-- **🌌 Ambient Cosmic Start Page**:
-  - Thin minimalist digital clock with gradient typography.
-  - Organic ambient glowing nebulae drifting softly in the background.
-  - Floating Omnibar with intelligent URL / search query detection.
-  - VisionOS-style frosted glass shortcut cards with specular borders and subtle hover lift (Apple, GitHub, YouTube, Reddit, Wikipedia, Hacker News).
-  - Telemetry badge showing security status and engine stats.
+- **Exact Brave Navigation Toolbar & Omnibox**:
+  - Navigation buttons: `←`, `→`, `⟳`, `⌂`.
+  - Rounded pill-shaped Omnibox (`#1E2029`) with security lock indicator (`🔒`), one-click bookmark star (`★`), and focus border in Brave Orange (`#FB542B`).
+  - Search queries route directly to **Brave Search** (`https://search.brave.com`).
+  - **Brave Shields Lion Button**: Distinctive orange lion badge (`🦁 14`) displaying real-time tracker protection telemetry.
+  - **Brave Rewards icon**: `▲`.
+  - **Brave Menu**: `☰` (customization and controls).
 
-- **🛡️ Aether Quantum Shield**:
-  - Frosted glass privacy card providing real-time telemetry on tracker neutralization, fingerprint cloaking, HTTPS enforcement, and zero-telemetry isolation.
+- **Exact Brave Bookmarks Bar**:
+  - Fixed dark bar (`#20222C`) with default shortcuts: Brave Search, GitHub, YouTube, Reddit, Wikipedia, Hacker News.
 
-- **⚡ Modern Chromium 155 Engine**:
-  - Full modern web standard support: ES6+, WebSockets, modern CSS grid/flexbox, HTML5 audio/video, and WASM.
-  - No blank pages, no rendering bugs.
+- **Exact Brave Start Page (New Tab)**:
+  - Statistics row:
+    - **1,842** Trackers & ads blocked
+    - **24.6 MB** Bandwidth saved
+    - **1.8 m** Time saved
+  - Digital clock and greeting (*"Good evening"*).
+  - Brave Search input box with `🦁` branding.
+  - Top site shortcut cards with favicons.
 
-- **⭐ Frosted Bookmarks & History**:
-  - Translucent bookmarks pill bar with right-click removal.
-  - Minimalist browsing history dialog (`⌘H`) with live instant filter.
-  - Full HTML source inspector (`⌥ Source` / `⌘U`) with 1-click clipboard copy.
+- **🛡️ Brave Shields Modal**:
+  - Displays protection status (*"SHIELDS ARE UP"*), blocked trackers count, HTTPS upgrades, fingerprinting protection, and script blocking.
 
 ---
 
@@ -40,56 +41,27 @@ Aether is a fast, standalone desktop web browser built from scratch in C# with a
 
 | Shortcut | Action |
 | :--- | :--- |
-| `Ctrl + T` (⌘T) | Open a new pill tab |
-| `Ctrl + W` (⌘W) | Close the active tab |
-| `Ctrl + R` (⌘R) or `F5` | Reload / refresh page |
-| `Ctrl + L` (⌘L) | Focus and highlight Omnibar |
-| `Ctrl + D` (⌘D) | Save / remove bookmark |
-| `Ctrl + H` (⌘H) | Open Browsing History |
-| `Ctrl + U` (⌘U) | Inspect page HTML source |
+| `Ctrl + T` | Open a new tab |
+| `Ctrl + W` | Close the active tab |
+| `Ctrl + R` or `F5` | Reload / refresh page |
+| `Ctrl + L` | Focus and select URL address bar |
+| `Ctrl + D` | Bookmark or unbookmark current page |
+| `Ctrl + H` | Open Browsing History |
+| `Ctrl + U` | View page source code |
 | `Alt + Left` | Navigate back |
 | `Alt + Right` | Navigate forward |
-| `Enter` in Omnibar | Navigate to address or query |
+| `Enter` in Omnibox | Search with Brave or navigate to address |
 
 ---
 
-## 🚀 Quick Launch
+## 🚀 How to Launch
 
-### 1-Click Launch
 Double-click `run.bat` or run:
 ```cmd
 run.bat
 ```
-This automatically compiles the browser (if not already built) and launches `AuraBrowser.exe`.
-
-### Manual Build
+To compile manually:
 ```cmd
 build.bat
 ```
-Compiled standalone binary is placed in `bin\AuraBrowser.exe`.
-
----
-
-## 📁 Architecture
-
-```
-simple-web-browser/
-├── src/
-│   ├── Program.cs             # Entry point & crash recovery
-│   ├── MainForm.cs            # Aether Apple-style UI, floating pill tabs & Omnibar
-│   ├── AetherShieldForm.cs    # Aether Quantum Shield frosted glass modal
-│   ├── BrowserTab.cs          # Chromium 155 WebView2 rendering lifecycle
-│   ├── BookmarkManager.cs     # Bookmarks persistence and management
-│   ├── HistoryManager.cs      # Browsing history persistence
-│   ├── HistoryForm.cs         # Frosted glass browsing history UI
-│   ├── SourceViewerForm.cs    # Obsidian HTML source code inspector
-│   └── HomePage.cs            # Ambient Cosmic Start Page (VisionOS style)
-├── bin/                       # Output directory for AuraBrowser.exe
-├── lib/                       # WebView2 Chromium libraries
-├── scripts/
-│   └── get_webview2.ps1       # Automated engine dependency installer
-├── build.bat                  # Instant 1-click build script
-├── run.bat                    # 1-click launch script
-├── .gitignore
-└── README.md
-```
+Executable output: `bin\AuraBrowser.exe`.
