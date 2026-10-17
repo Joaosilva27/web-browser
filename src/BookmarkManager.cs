@@ -84,11 +84,12 @@ namespace SimpleBrowser
             else
             {
                 // Default starter bookmarks
-                _bookmarks.Add(new BookmarkItem("Google", "https://www.google.com"));
+                _bookmarks.Add(new BookmarkItem("🦁 Brave", "https://search.brave.com"));
                 _bookmarks.Add(new BookmarkItem("GitHub", "https://github.com"));
-                _bookmarks.Add(new BookmarkItem("Wikipedia", "https://www.wikipedia.org"));
-                _bookmarks.Add(new BookmarkItem("Hacker News", "https://news.ycombinator.com"));
                 _bookmarks.Add(new BookmarkItem("YouTube", "https://www.youtube.com"));
+                _bookmarks.Add(new BookmarkItem("Wikipedia", "https://www.wikipedia.org"));
+                _bookmarks.Add(new BookmarkItem("Reddit", "https://www.reddit.com"));
+                _bookmarks.Add(new BookmarkItem("Hacker News", "https://news.ycombinator.com"));
                 SaveBookmarks();
             }
         }

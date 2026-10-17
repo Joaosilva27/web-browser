@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ============================================
-echo   Building Aura Web Browser...
+echo   Building Brave Browser UI Edition...
 echo ============================================
 
 if not exist bin mkdir bin

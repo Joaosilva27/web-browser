@@ -89,8 +89,8 @@ namespace SimpleBrowser
             {
                 if (destination.Contains(" ") || !destination.Contains("."))
                 {
-                    // Search Google
-                    destination = "https://www.google.com/search?q=" + Uri.EscapeDataString(destination);
+                    // Search Brave
+                    destination = "https://search.brave.com/search?q=" + Uri.EscapeDataString(destination);
                 }
                 else
                 {

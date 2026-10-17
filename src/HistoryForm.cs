@@ -18,31 +18,39 @@ namespace SimpleBrowser
         {
             _historyManager = historyManager;
 
-            Text = "Browsing History";
-            Size = new Size(750, 500);
+            Text = "Browsing History - Brave";
+            Size = new Size(780, 520);
             StartPosition = FormStartPosition.CenterParent;
-            BackColor = Color.FromArgb(32, 34, 37);
+            BackColor = Color.FromArgb(24, 25, 36);
             ForeColor = Color.White;
 
             var topPanel = new Panel();
             topPanel.Dock = DockStyle.Top;
-            topPanel.Height = 46;
-            topPanel.BackColor = Color.FromArgb(47, 49, 54);
-            topPanel.Padding = new Padding(10, 8, 10, 8);
+            topPanel.Height = 50;
+            topPanel.BackColor = Color.FromArgb(34, 36, 50);
+            topPanel.Padding = new Padding(12, 10, 12, 10);
+
+            var iconLabel = new Label();
+            iconLabel.Text = "🕒";
+            iconLabel.Dock = DockStyle.Left;
+            iconLabel.Width = 30;
+            iconLabel.Font = new Font("Segoe UI", 11F);
+            iconLabel.TextAlign = ContentAlignment.MiddleLeft;
 
             var searchLabel = new Label();
             searchLabel.Text = "Filter:";
-            searchLabel.ForeColor = Color.LightGray;
+            searchLabel.ForeColor = Color.FromArgb(160, 165, 180);
             searchLabel.Dock = DockStyle.Left;
             searchLabel.Width = 45;
             searchLabel.TextAlign = ContentAlignment.MiddleLeft;
 
             _searchBox = new TextBox();
             _searchBox.Dock = DockStyle.Left;
-            _searchBox.Width = 260;
-            _searchBox.BackColor = Color.FromArgb(32, 34, 37);
+            _searchBox.Width = 280;
+            _searchBox.BackColor = Color.FromArgb(24, 25, 36);
             _searchBox.ForeColor = Color.White;
             _searchBox.Font = new Font("Segoe UI", 9.5F);
+            _searchBox.BorderStyle = BorderStyle.FixedSingle;
             _searchBox.TextChanged += delegate { PopulateList(); };
 
             _clearBtn = new Button();
@@ -50,6 +58,7 @@ namespace SimpleBrowser
             _clearBtn.Dock = DockStyle.Right;
             _clearBtn.Width = 110;
             _clearBtn.FlatStyle = FlatStyle.Flat;
+            _clearBtn.FlatAppearance.BorderSize = 0;
             _clearBtn.BackColor = Color.FromArgb(192, 57, 43);
             _clearBtn.ForeColor = Color.White;
             _clearBtn.Cursor = Cursors.Hand;
@@ -63,12 +72,14 @@ namespace SimpleBrowser
             };
 
             _openBtn = new Button();
-            _openBtn.Text = "Open";
+            _openBtn.Text = "Open in Brave";
             _openBtn.Dock = DockStyle.Right;
-            _openBtn.Width = 90;
+            _openBtn.Width = 110;
             _openBtn.FlatStyle = FlatStyle.Flat;
-            _openBtn.BackColor = Color.FromArgb(41, 128, 185);
+            _openBtn.FlatAppearance.BorderSize = 0;
+            _openBtn.BackColor = Color.FromArgb(251, 84, 43); // Brave Orange
             _openBtn.ForeColor = Color.White;
+            _openBtn.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _openBtn.Cursor = Cursors.Hand;
             _openBtn.Click += delegate { OpenSelected(); };
 
@@ -76,17 +87,18 @@ namespace SimpleBrowser
             topPanel.Controls.Add(_openBtn);
             topPanel.Controls.Add(_searchBox);
             topPanel.Controls.Add(searchLabel);
+            topPanel.Controls.Add(iconLabel);
 
             _listView = new ListView();
             _listView.Dock = DockStyle.Fill;
             _listView.View = View.Details;
             _listView.FullRowSelect = true;
             _listView.GridLines = true;
-            _listView.BackColor = Color.FromArgb(32, 34, 37);
+            _listView.BackColor = Color.FromArgb(24, 25, 36);
             _listView.ForeColor = Color.White;
             _listView.Font = new Font("Segoe UI", 9F);
             _listView.Columns.Add("Time", 140);
-            _listView.Columns.Add("Title", 280);
+            _listView.Columns.Add("Title", 300);
             _listView.Columns.Add("URL", 300);
 
             _listView.DoubleClick += delegate { OpenSelected(); };
