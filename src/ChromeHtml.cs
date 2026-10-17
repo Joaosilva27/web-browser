@@ -11,94 +11,114 @@ namespace SimpleBrowser
 <head>
     <meta charset='utf-8' />
     <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-    <title>Brave Chrome</title>
+    <title>Browser Chrome</title>
+    <link rel='preconnect' href='https://fonts.googleapis.com' />
+    <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin />
+    <link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap' rel='stylesheet' />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 
         :root {
-            --bg-tabstrip: #1e2029;
-            --bg-toolbar: #282b36;
-            --bg-omnibox: #1e2029;
-            --border-omnibox: #393c4a;
+            --frame: #121212;
+            --toolbar: #202124;
+            --tab-strip: #181818;
+            --tab-active: #202124;
+            --tab-inactive-hover: #1f2023;
+            --omnibox-bg: #2a2a2d;
+            --omnibox-border: #3c3c42;
+            --omnibox-focus: #fb542b;
             --brave-orange: #fb542b;
-            --brave-orange-hover: #ff6a45;
-            --text-primary: #ffffff;
-            --text-muted: #9fa4b2;
-            --tab-inactive: #1e2029;
-            --tab-hover: #242732;
+            --brave-orange-light: #ff7654;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --text-tab-inactive: #969696;
+            --separator: rgba(255,255,255,0.08);
+            --btn-hover: rgba(255,255,255,0.10);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg-tabstrip);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+            background: var(--frame);
             color: var(--text-primary);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Drag region */
-        .drag-region {
-            -webkit-app-region: drag;
-        }
-        .no-drag {
-            -webkit-app-region: no-drag;
-        }
+        .drag-region { -webkit-app-region: drag; }
+        .no-drag { -webkit-app-region: no-drag; }
 
-        /* ROW 1: Tabs + Windows Caption Controls */
-        .top-row {
-            height: 38px;
+        /* ── ROW 1: TAB STRIP ── */
+        .tab-strip {
+            height: 36px;
+            background: var(--tab-strip);
             display: flex;
             align-items: flex-end;
-            background: var(--bg-tabstrip);
-            padding-left: 8px;
-            position: relative;
+            padding: 0 0 0 8px;
         }
 
-        /* Brave Tabs */
-        .tabs-container {
+        .tabs-scroll {
             display: flex;
             align-items: flex-end;
-            gap: 2px;
+            gap: 1px;
             flex: 1;
             height: 100%;
             overflow-x: auto;
             scrollbar-width: none;
         }
-        .tabs-container::-webkit-scrollbar { display: none; }
+        .tabs-scroll::-webkit-scrollbar { display: none; }
 
         .tab {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 0 12px;
-            height: 34px;
-            background: var(--tab-inactive);
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
+            gap: 6px;
+            padding: 0 14px 0 10px;
+            height: 32px;
+            background: transparent;
+            border-radius: 8px 8px 0 0;
             font-size: 12px;
-            color: var(--text-muted);
+            font-weight: 500;
+            color: var(--text-tab-inactive);
             cursor: pointer;
-            max-width: 220px;
-            min-width: 140px;
+            max-width: 240px;
+            min-width: 100px;
+            transition: background 0.12s, color 0.12s;
             position: relative;
-            border-top: 2px solid transparent;
-            transition: background 0.15s, color 0.15s;
+            letter-spacing: -0.01em;
         }
         .tab:hover {
-            background: var(--tab-hover);
+            background: var(--tab-inactive-hover);
             color: var(--text-primary);
         }
         .tab.active {
-            background: var(--bg-toolbar);
-            color: #ffffff;
-            border-top: 2px solid var(--brave-orange);
-            font-weight: 500;
+            background: var(--tab-active);
+            color: #fff;
         }
-        .tab-icon {
-            font-size: 12px;
-            color: var(--brave-orange);
+        /* Separator lines between inactive tabs */
+        .tab:not(.active) + .tab:not(.active)::before {
+            content: '';
+            position: absolute;
+            left: -1px;
+            top: 8px;
+            bottom: 8px;
+            width: 1px;
+            background: var(--separator);
+        }
+        .tab-favicon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: var(--brave-orange);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: #fff;
+            font-weight: 700;
+            flex-shrink: 0;
         }
         .tab-title {
             white-space: nowrap;
@@ -107,367 +127,387 @@ namespace SimpleBrowser
             flex: 1;
         }
         .tab-close {
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
-            color: var(--text-muted);
-            transition: background 0.15s, color 0.15s;
+            font-size: 11px;
+            color: var(--text-secondary);
+            transition: background 0.12s, color 0.12s;
+            flex-shrink: 0;
+            opacity: 0;
         }
+        .tab:hover .tab-close,
+        .tab.active .tab-close { opacity: 1; }
         .tab-close:hover {
-            background: rgba(255, 255, 255, 0.2);
-            color: #ffffff;
+            background: rgba(255,255,255,0.18);
+            color: #fff;
         }
 
         .new-tab-btn {
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            color: var(--text-muted);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 300;
+            margin: 0 4px 2px;
+            transition: background 0.12s, color 0.12s;
+            flex-shrink: 0;
+        }
+        .new-tab-btn:hover {
+            background: var(--btn-hover);
+            color: #fff;
+        }
+
+        /* Spacer pushes caption buttons right */
+        .tab-strip-spacer { flex: 0; min-width: 60px; }
+
+        /* Windows caption buttons */
+        .window-controls {
+            display: flex;
+            height: 36px;
+            margin-left: auto;
+        }
+        .caption-btn {
+            width: 46px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 10px;
+            cursor: pointer;
+            transition: background 0.12s, color 0.12s;
+            font-family: 'Segoe MDL2 Assets', 'Segoe Fluent Icons', sans-serif;
+        }
+        .caption-btn:hover {
+            background: var(--btn-hover);
+            color: #fff;
+        }
+        .caption-btn.close-btn:hover {
+            background: #c42b1c;
+            color: #fff;
+        }
+        .caption-btn svg {
+            width: 10px;
+            height: 10px;
+            fill: currentColor;
+        }
+
+        /* ── ROW 2: TOOLBAR ── */
+        .toolbar {
+            height: 40px;
+            background: var(--toolbar);
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            gap: 4px;
+        }
+
+        .nav-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        .icon-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             font-size: 16px;
-            margin-bottom: 3px;
-            margin-left: 4px;
-            transition: background 0.15s, color 0.15s;
+            transition: background 0.12s, color 0.12s;
         }
-        .new-tab-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
+        .icon-btn:hover {
+            background: var(--btn-hover);
+            color: #fff;
         }
-
-        /* Windows 10/11 Caption Controls */
-        .window-controls {
-            display: flex;
-            height: 100%;
-            margin-left: auto;
-        }
-        .caption-btn {
-            width: 46px;
-            height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-size: 11px;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s;
-        }
-        .caption-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-        }
-        .caption-btn.btn-close:hover {
-            background: #e81123;
-            color: #ffffff;
-        }
-
-        /* ROW 2: Navigation Toolbar & Omnibox */
-        .toolbar-row {
-            height: 44px;
-            background: var(--bg-toolbar);
-            display: flex;
-            align-items: center;
-            padding: 0 10px;
-            gap: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .nav-buttons {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-        }
-        .nav-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: transparent;
-            border: none;
-            color: #d1d5db;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.15s;
-        }
-        .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
-        }
-        .nav-btn:disabled {
-            opacity: 0.3;
+        .icon-btn:disabled {
+            opacity: 0.30;
             cursor: default;
+            pointer-events: none;
+        }
+        .icon-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
         }
 
-        /* Exact Brave Omnibox */
-        .omnibox-container {
+        /* Omnibox */
+        .omnibox-wrap {
             flex: 1;
-            position: relative;
+            margin: 0 6px;
         }
         .omnibox {
             display: flex;
             align-items: center;
-            background: var(--bg-omnibox);
-            border: 1px solid var(--border-omnibox);
-            border-radius: 18px;
-            height: 32px;
+            background: var(--omnibox-bg);
+            border: 1.5px solid transparent;
+            border-radius: 24px;
+            height: 30px;
             padding: 0 12px;
             gap: 8px;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        .omnibox:hover {
+            background: #313136;
         }
         .omnibox:focus-within {
-            border-color: var(--brave-orange);
-            box-shadow: 0 0 0 1px var(--brave-orange);
+            border-color: var(--omnibox-focus);
+            background: #313136;
+            box-shadow: 0 0 0 1px var(--omnibox-focus);
         }
         .lock-icon {
-            font-size: 11px;
-            color: #9fa4b2;
+            font-size: 12px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
         }
         .url-input {
             flex: 1;
             background: transparent;
             border: none;
             outline: none;
-            color: #ffffff;
+            color: var(--text-primary);
             font-size: 13px;
-            font-family: inherit;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif;
+            font-weight: 400;
+            letter-spacing: -0.01em;
         }
         .url-input::placeholder {
             color: #6b7280;
         }
-        .bookmark-btn {
-            font-size: 13px;
-            color: var(--text-muted);
+        .star-btn {
+            font-size: 14px;
+            color: var(--text-secondary);
             cursor: pointer;
             transition: color 0.15s;
+            flex-shrink: 0;
         }
-        .bookmark-btn.active {
+        .star-btn.bookmarked {
             color: var(--brave-orange);
         }
 
-        /* Exact Brave Action Buttons (Shields Lion, Rewards, History, Menu) */
+        /* Actions right side */
         .actions-group {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 2px;
         }
-        .shields-btn {
+
+        /* Shields lion pill */
+        .shields-pill {
             display: flex;
             align-items: center;
             gap: 4px;
-            background: rgba(251, 84, 43, 0.15);
-            border: 1px solid rgba(251, 84, 43, 0.4);
-            border-radius: 14px;
-            padding: 3px 8px;
+            background: rgba(251, 84, 43, 0.12);
+            border: 1px solid rgba(251, 84, 43, 0.35);
+            border-radius: 12px;
+            padding: 3px 8px 3px 6px;
             cursor: pointer;
             transition: background 0.15s;
+            margin-right: 2px;
         }
-        .shields-btn:hover {
-            background: rgba(251, 84, 43, 0.28);
+        .shields-pill:hover {
+            background: rgba(251, 84, 43, 0.22);
         }
         .shields-lion {
-            font-size: 14px;
+            font-size: 13px;
         }
         .shields-count {
             font-size: 11px;
             font-weight: 700;
             color: var(--brave-orange);
+            font-family: 'Inter', sans-serif;
         }
 
-        .rewards-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: transparent;
-            border: none;
-            color: #ff542b;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-        .rewards-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        /* ROW 3: Bookmarks Bar */
-        .bookmarks-row {
-            height: 28px;
-            background: #20222c;
+        /* ── ROW 3: BOOKMARKS BAR ── */
+        .bookmarks-bar {
+            height: 26px;
+            background: var(--toolbar);
             display: flex;
             align-items: center;
             padding: 0 12px;
-            gap: 12px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+            gap: 2px;
+            border-top: 1px solid var(--separator);
         }
-        .bookmark-item {
+        .bm-item {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 11.5px;
-            color: #d1d5db;
-            text-decoration: none;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
             cursor: pointer;
-            padding: 2px 6px;
+            padding: 3px 8px;
             border-radius: 4px;
-            transition: background 0.15s, color 0.15s;
+            transition: background 0.12s, color 0.12s;
+            white-space: nowrap;
+            letter-spacing: -0.01em;
         }
-        .bookmark-item:hover {
-            background: rgba(255, 255, 255, 0.08);
-            color: #ffffff;
+        .bm-item:hover {
+            background: var(--btn-hover);
+            color: var(--text-primary);
         }
-        .bm-icon {
-            font-size: 11px;
+        .bm-favicon {
+            font-size: 12px;
+            flex-shrink: 0;
         }
     </style>
 </head>
 <body class='drag-region'>
 
-    <!-- ROW 1: Tabs + Windows Caption Controls -->
-    <div class='top-row'>
-        <div class='tabs-container no-drag' id='tabs-container'>
-            <!-- Injected dynamically -->
-        </div>
-
-        <div class='new-tab-btn no-drag' title='New Tab (Ctrl+T)' onclick='sendMsg(""new_tab"")'>+</div>
-
+    <!-- TAB STRIP -->
+    <div class='tab-strip'>
+        <div class='tabs-scroll no-drag' id='tabs-container'></div>
+        <div class='new-tab-btn no-drag' title='New tab (Ctrl+T)' onclick='post(""new_tab"")'>+</div>
+        <div class='tab-strip-spacer'></div>
         <div class='window-controls no-drag'>
-            <button class='caption-btn' title='Minimize' onclick='sendMsg(""window_min"")'>&#x2212;</button>
-            <button class='caption-btn' title='Maximize' onclick='sendMsg(""window_max"")'>&#x25A2;</button>
-            <button class='caption-btn btn-close' title='Close' onclick='sendMsg(""window_close"")'>&#x2715;</button>
+            <button class='caption-btn' title='Minimize' onclick='post(""window_min"")'>
+                <svg viewBox='0 0 10 1'><rect width='10' height='1'/></svg>
+            </button>
+            <button class='caption-btn' title='Maximize' onclick='post(""window_max"")'>
+                <svg viewBox='0 0 10 10'><rect x='0.5' y='0.5' width='9' height='9' fill='none' stroke='currentColor' stroke-width='1'/></svg>
+            </button>
+            <button class='caption-btn close-btn' title='Close' onclick='post(""window_close"")'>
+                <svg viewBox='0 0 10 10'><line x1='1' y1='1' x2='9' y2='9' stroke='currentColor' stroke-width='1.2'/><line x1='9' y1='1' x2='1' y2='9' stroke='currentColor' stroke-width='1.2'/></svg>
+            </button>
         </div>
     </div>
 
-    <!-- ROW 2: Navigation Toolbar & Omnibox -->
-    <div class='toolbar-row no-drag'>
-        <div class='nav-buttons'>
-            <button class='nav-btn' id='btn-back' title='Click to go back (Alt+Left)' onclick='sendMsg(""back"")'>&larr;</button>
-            <button class='nav-btn' id='btn-forward' title='Click to go forward (Alt+Right)' onclick='sendMsg(""forward"")'>&rarr;</button>
-            <button class='nav-btn' id='btn-reload' title='Reload this page (Ctrl+R)' onclick='sendMsg(""reload"")'>&#x21BB;</button>
-            <button class='nav-btn' id='btn-home' title='Open homepage' onclick='sendMsg(""home"")'>&#x2302;</button>
+    <!-- TOOLBAR -->
+    <div class='toolbar no-drag'>
+        <div class='nav-group'>
+            <button class='icon-btn' id='btn-back' title='Back (Alt+Left)' onclick='post(""back"")'>
+                <svg viewBox='0 0 24 24'><path d='M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z'/></svg>
+            </button>
+            <button class='icon-btn' id='btn-fwd' title='Forward (Alt+Right)' onclick='post(""forward"")'>
+                <svg viewBox='0 0 24 24'><path d='M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z'/></svg>
+            </button>
+            <button class='icon-btn' id='btn-reload' title='Reload (Ctrl+R)' onclick='post(""reload"")'>
+                <svg viewBox='0 0 24 24'><path d='M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z'/></svg>
+            </button>
         </div>
 
-        <div class='omnibox-container'>
+        <div class='omnibox-wrap'>
             <div class='omnibox'>
-                <span class='lock-icon'>🔒</span>
-                <input class='url-input' id='url-input' type='text' placeholder='Search with Brave or enter address' spellcheck='false' />
-                <span class='bookmark-btn' id='btn-star' title='Bookmark this tab (Ctrl+D)' onclick='sendMsg(""bookmark"")'>★</span>
+                <span class='lock-icon'>
+                    <svg width='12' height='12' viewBox='0 0 24 24' fill='currentColor'><path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM9 8V6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9z'/></svg>
+                </span>
+                <input class='url-input' id='url-input' type='text' placeholder='Search Brave or type a URL' spellcheck='false' />
+                <span class='star-btn' id='btn-star' title='Bookmark this tab (Ctrl+D)' onclick='post(""bookmark"")'>☆</span>
             </div>
         </div>
 
         <div class='actions-group'>
-            <div class='shields-btn' title='Brave Shields' onclick='sendMsg(""shield"")'>
+            <div class='shields-pill' title='Brave Shields: Trackers blocked' onclick='post(""shield"")'>
                 <span class='shields-lion'>🦁</span>
-                <span class='shields-count'>14</span>
+                <span class='shields-count' id='shields-count'>0</span>
             </div>
-            <button class='rewards-btn' title='Brave Rewards' onclick='sendMsg(""shield"")'>▲</button>
-            <button class='nav-btn' title='History (Ctrl+H)' onclick='sendMsg(""history"")'>🕒</button>
-            <button class='nav-btn' title='Source Code (Ctrl+U)' onclick='sendMsg(""source"")'>&lt;/&gt;</button>
-            <button class='nav-btn' title='Customize and control Brave' onclick='sendMsg(""menu"")'>&#x2630;</button>
+            <button class='icon-btn' title='Brave Rewards'>
+                <svg viewBox='0 0 24 24' fill='var(--brave-orange)'><path d='M12 2 L22 8.5 L22 15.5 L12 22 L2 15.5 L2 8.5 Z' fill='none' stroke='var(--brave-orange)' stroke-width='1.5'/><path d='M12 6 L16 9 L14 14 L10 14 L8 9 Z' fill='var(--brave-orange)' opacity='0.7'/></svg>
+            </button>
+            <button class='icon-btn' title='History (Ctrl+H)' onclick='post(""history"")'>
+                <svg viewBox='0 0 24 24'><path d='M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z'/></svg>
+            </button>
+            <button class='icon-btn' title='View page source (Ctrl+U)' onclick='post(""source"")'>
+                <svg viewBox='0 0 24 24'><path d='M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z'/></svg>
+            </button>
+            <button class='icon-btn' title='Customize and control Brave' onclick='post(""menu"")'>
+                <svg viewBox='0 0 24 24'><circle cx='12' cy='5' r='2'/><circle cx='12' cy='12' r='2'/><circle cx='12' cy='19' r='2'/></svg>
+            </button>
         </div>
     </div>
 
-    <!-- ROW 3: Bookmarks Bar -->
-    <div class='bookmarks-row no-drag'>
-        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://search.brave.com"" })'>
-            <span class='bm-icon'>🦁</span>
-            <span>Brave Search</span>
+    <!-- BOOKMARKS BAR -->
+    <div class='bookmarks-bar no-drag' id='bookmarks-bar'>
+        <div class='bm-item' onclick='post(""navigate"",{url:""https://search.brave.com""})'>
+            <span class='bm-favicon'>🦁</span><span>Brave Search</span>
         </div>
-        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://github.com"" })'>
-            <span class='bm-icon'>🐙</span>
-            <span>GitHub</span>
+        <div class='bm-item' onclick='post(""navigate"",{url:""https://github.com""})'>
+            <span class='bm-favicon'>🐙</span><span>GitHub</span>
         </div>
-        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://youtube.com"" })'>
-            <span class='bm-icon'>▶️</span>
-            <span>YouTube</span>
+        <div class='bm-item' onclick='post(""navigate"",{url:""https://youtube.com""})'>
+            <span class='bm-favicon'>▶️</span><span>YouTube</span>
         </div>
-        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://reddit.com"" })'>
-            <span class='bm-icon'>💬</span>
-            <span>Reddit</span>
+        <div class='bm-item' onclick='post(""navigate"",{url:""https://reddit.com""})'>
+            <span class='bm-favicon'>💬</span><span>Reddit</span>
         </div>
-        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://wikipedia.org"" })'>
-            <span class='bm-icon'>📚</span>
-            <span>Wikipedia</span>
+        <div class='bm-item' onclick='post(""navigate"",{url:""https://wikipedia.org""})'>
+            <span class='bm-favicon'>📚</span><span>Wikipedia</span>
         </div>
-        <div class='bookmark-item' onclick='sendMsg(""navigate"", { url: ""https://news.ycombinator.com"" })'>
-            <span class='bm-icon'>⚡</span>
-            <span>Hacker News</span>
+        <div class='bm-item' onclick='post(""navigate"",{url:""https://news.ycombinator.com""})'>
+            <span class='bm-favicon'>⚡</span><span>Hacker News</span>
         </div>
     </div>
 
     <script>
-        function sendMsg(action, data) {
+        function post(action, data) {
             if (window.chrome && window.chrome.webview) {
-                window.chrome.webview.postMessage(Object.assign({ action: action }, data || {}));
+                window.chrome.webview.postMessage(Object.assign({action:action}, data||{}));
             }
         }
 
         var urlInput = document.getElementById('url-input');
         urlInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                sendMsg('navigate', { url: urlInput.value.trim() });
-            }
+            if (e.key === 'Enter') post('navigate', {url: urlInput.value.trim()});
         });
-        urlInput.addEventListener('click', function() {
-            urlInput.select();
-        });
+        urlInput.addEventListener('focus', function() { urlInput.select(); });
 
-        // Global API called by C#
         window.BraveAPI = {
-            renderTabs: function(tabs, activeIndex) {
-                var container = document.getElementById('tabs-container');
-                container.innerHTML = '';
-                tabs.forEach(function(tab, index) {
-                    var tabEl = document.createElement('div');
-                    tabEl.className = 'tab' + (index === activeIndex ? ' active' : '');
-                    tabEl.onclick = function() { sendMsg('switch_tab', { index: index }); };
+            renderTabs: function(tabs, activeIdx) {
+                var c = document.getElementById('tabs-container');
+                c.innerHTML = '';
+                for (var i = 0; i < tabs.length; i++) {
+                    (function(idx) {
+                        var t = document.createElement('div');
+                        t.className = 'tab' + (idx === activeIdx ? ' active' : '');
+                        t.onclick = function(){ post('switch_tab', {index:idx}); };
 
-                    var icon = document.createElement('span');
-                    icon.className = 'tab-icon';
-                    icon.innerText = '🦁';
+                        var fav = document.createElement('div');
+                        fav.className = 'tab-favicon';
+                        fav.innerText = (tabs[idx].title || 'N')[0].toUpperCase();
 
-                    var title = document.createElement('span');
-                    title.className = 'tab-title';
-                    title.innerText = tab.title || 'New Tab';
+                        var title = document.createElement('span');
+                        title.className = 'tab-title';
+                        title.innerText = tabs[idx].title || 'New Tab';
 
-                    var close = document.createElement('span');
-                    close.className = 'tab-close';
-                    close.innerText = '✕';
-                    close.onclick = function(e) {
-                        e.stopPropagation();
-                        sendMsg('close_tab', { index: index });
-                    };
+                        var close = document.createElement('span');
+                        close.className = 'tab-close';
+                        close.innerText = '\u00d7';
+                        close.onclick = function(e){ e.stopPropagation(); post('close_tab',{index:idx}); };
 
-                    tabEl.appendChild(icon);
-                    tabEl.appendChild(title);
-                    tabEl.appendChild(close);
-                    container.appendChild(tabEl);
-                });
+                        t.appendChild(fav);
+                        t.appendChild(title);
+                        t.appendChild(close);
+                        c.appendChild(t);
+                    })(i);
+                }
             },
             setUrl: function(url) {
                 urlInput.value = (url === 'about:home' ? '' : url);
             },
-            setNavState: function(canBack, canForward) {
+            setNavState: function(canBack, canFwd) {
                 document.getElementById('btn-back').disabled = !canBack;
-                document.getElementById('btn-forward').disabled = !canForward;
+                document.getElementById('btn-fwd').disabled = !canFwd;
             },
-            setBookmarked: function(isBookmarked) {
-                var btn = document.getElementById('btn-star');
-                if (isBookmarked) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
+            setBookmarked: function(yes) {
+                var s = document.getElementById('btn-star');
+                s.innerText = yes ? '\u2605' : '\u2606';
+                s.className = 'star-btn' + (yes ? ' bookmarked' : '');
             }
         };
     </script>
