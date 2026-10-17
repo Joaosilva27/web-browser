@@ -29,17 +29,17 @@ namespace SimpleBrowser
         public BrowserTab(string initialUrl = null)
         {
             Text = "New Tab";
-            BackColor = Color.FromArgb(27, 28, 38);
+            BackColor = Color.FromArgb(10, 11, 16);
 
             _progressBar = new ProgressBar();
             _progressBar.Dock = DockStyle.Top;
-            _progressBar.Height = 3;
+            _progressBar.Height = 2;
             _progressBar.Visible = false;
             _progressBar.Style = ProgressBarStyle.Continuous;
 
             _webView = new WebView2();
             _webView.Dock = DockStyle.Fill;
-            _webView.DefaultBackgroundColor = Color.FromArgb(17, 16, 25);
+            _webView.DefaultBackgroundColor = Color.FromArgb(7, 8, 11);
 
             _pendingUrl = string.IsNullOrEmpty(initialUrl) ? "about:home" : initialUrl;
 
@@ -128,8 +128,7 @@ namespace SimpleBrowser
             {
                 if (destination.Contains(" ") || !destination.Contains("."))
                 {
-                    // Search Brave
-                    destination = "https://search.brave.com/search?q=" + Uri.EscapeDataString(destination);
+                    destination = "https://www.google.com/search?q=" + Uri.EscapeDataString(destination);
                 }
                 else
                 {

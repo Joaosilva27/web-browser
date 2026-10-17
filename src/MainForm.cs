@@ -7,16 +7,19 @@ namespace SimpleBrowser
 {
     public class MainForm : Form
     {
-        // Brave Theme Colors
-        private static readonly Color ColorTabHeader = Color.FromArgb(27, 28, 38);       // #1B1C26
-        private static readonly Color ColorActiveTab = Color.FromArgb(40, 42, 58);       // #282A3A
-        private static readonly Color ColorInactiveTab = Color.FromArgb(27, 28, 38);     // #1B1C26
-        private static readonly Color ColorNavBar = Color.FromArgb(40, 42, 58);          // #282A3A
-        private static readonly Color ColorOmnibox = Color.FromArgb(24, 25, 36);         // #181924
-        private static readonly Color ColorBookmarksBar = Color.FromArgb(32, 33, 46);    // #20212E
-        private static readonly Color ColorBraveOrange = Color.FromArgb(251, 84, 43);    // #FB542B
-        private static readonly Color ColorTextMuted = Color.FromArgb(159, 164, 178);    // #9FA4B2
-        private static readonly Color ColorButtonHover = Color.FromArgb(56, 59, 77);     // #383B4D
+        // Apple-inspired Futuristic Palette
+        private static readonly Color ColorBase = Color.FromArgb(10, 11, 16);            // Obsidian #0A0B10
+        private static readonly Color ColorHeader = Color.FromArgb(13, 14, 21);          // #0D0E15
+        private static readonly Color ColorToolbar = Color.FromArgb(17, 19, 28);         // #11131C
+        private static readonly Color ColorOmnibarBg = Color.FromArgb(11, 12, 18);       // #0B0C12
+        private static readonly Color ColorOmnibarBorder = Color.FromArgb(36, 40, 56);   // #242838
+        private static readonly Color ColorAccentCyan = Color.FromArgb(0, 242, 254);     // #00F2FE (Cyan Glow)
+        private static readonly Color ColorAccentPurple = Color.FromArgb(157, 78, 221);  // #9D4EDD
+        private static readonly Color ColorTextWhite = Color.FromArgb(245, 245, 247);    // SF Pro White
+        private static readonly Color ColorTextMuted = Color.FromArgb(134, 134, 139);    // Apple Gray #86868B
+        private static readonly Color ColorTabActive = Color.FromArgb(26, 30, 44);       // Frosted Glass Pill
+        private static readonly Color ColorTabInactive = Color.FromArgb(14, 16, 23);     // Deep Translucent
+        private static readonly Color ColorButtonHover = Color.FromArgb(32, 36, 52);
 
         private TabControl _tabControl;
         private Button _btnNewTabHeader;
@@ -30,12 +33,12 @@ namespace SimpleBrowser
         private Button _btnForward;
         private Button _btnRefresh;
         private Button _btnHome;
-        private Panel _omniboxPanel;
+        private Panel _omnibarPanel;
         private Label _lockIcon;
         private TextBox _txtUrl;
         private Button _btnStar;
         private Button _btnGo;
-        private Button _btnShields;
+        private Button _btnShield;
         private Button _btnHistory;
         private Button _btnSource;
         private Button _btnMenu;
@@ -55,75 +58,84 @@ namespace SimpleBrowser
 
         private void InitializeUi()
         {
-            Text = "Brave Browser";
-            Size = new Size(1220, 800);
+            Text = "Aether";
+            Size = new Size(1260, 820);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 9F);
-            BackColor = ColorTabHeader;
+            BackColor = ColorBase;
             KeyPreview = true;
             KeyDown += OnFormKeyDown;
 
-            // 1. TOP TAB CONTROL (OwnerDraw for Brave look)
+            // 1. TOP TAB CONTROL (OwnerDraw for Apple VisionOS floating pill look)
             _tabControl = new TabControl();
             _tabControl.Dock = DockStyle.Fill;
             _tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
             _tabControl.SizeMode = TabSizeMode.Fixed;
-            _tabControl.ItemSize = new Size(190, 36);
-            _tabControl.Padding = new Point(14, 4);
+            _tabControl.ItemSize = new Size(196, 38);
+            _tabControl.Padding = new Point(16, 4);
             _tabControl.DrawItem += OnTabControlDrawItem;
             _tabControl.MouseDown += OnTabControlMouseDown;
             _tabControl.SelectedIndexChanged += delegate { UpdateControls(); };
 
+            // Floating + Button beside tabs
             _btnNewTabHeader = new Button();
             _btnNewTabHeader.Text = "+";
             _btnNewTabHeader.Font = new Font("Segoe UI", 12F, FontStyle.Regular);
             _btnNewTabHeader.FlatStyle = FlatStyle.Flat;
             _btnNewTabHeader.FlatAppearance.BorderSize = 0;
-            _btnNewTabHeader.BackColor = ColorTabHeader;
-            _btnNewTabHeader.ForeColor = Color.White;
-            _btnNewTabHeader.Size = new Size(32, 32);
+            _btnNewTabHeader.BackColor = Color.FromArgb(20, 23, 33);
+            _btnNewTabHeader.ForeColor = ColorTextMuted;
+            _btnNewTabHeader.Size = new Size(30, 30);
             _btnNewTabHeader.Cursor = Cursors.Hand;
-            _btnNewTabHeader.Location = new Point(200, 2);
+            _btnNewTabHeader.Location = new Point(210, 4);
+            _btnNewTabHeader.MouseEnter += delegate { _btnNewTabHeader.ForeColor = ColorAccentCyan; _btnNewTabHeader.BackColor = Color.FromArgb(30, 35, 50); };
+            _btnNewTabHeader.MouseLeave += delegate { _btnNewTabHeader.ForeColor = ColorTextMuted; _btnNewTabHeader.BackColor = Color.FromArgb(20, 23, 33); };
             _btnNewTabHeader.Click += delegate { AddNewTab(); };
 
-            // 2. NAVIGATION BAR
+            // 2. UNIFIED FLOATING TOOLBAR
             _navPanel = new Panel();
             _navPanel.Dock = DockStyle.Top;
-            _navPanel.Height = 48;
-            _navPanel.BackColor = ColorNavBar;
-            _navPanel.Padding = new Padding(8, 6, 8, 6);
+            _navPanel.Height = 52;
+            _navPanel.BackColor = ColorToolbar;
+            _navPanel.Padding = new Padding(12, 8, 12, 8);
 
-            _btnBack = CreateNavButton("←", "Back (Alt+Left)");
+            _btnBack = CreatePillButton("‹", "Back (Alt+Left)", 36);
+            _btnBack.Font = new Font("Segoe UI", 15F, FontStyle.Regular);
             _btnBack.Click += delegate { if (ActiveTab != null) ActiveTab.GoBack(); };
 
-            _btnForward = CreateNavButton("→", "Forward (Alt+Right)");
+            _btnForward = CreatePillButton("›", "Forward (Alt+Right)", 36);
+            _btnForward.Font = new Font("Segoe UI", 15F, FontStyle.Regular);
             _btnForward.Click += delegate { if (ActiveTab != null) ActiveTab.GoForward(); };
 
-            _btnRefresh = CreateNavButton("⟳", "Reload (Ctrl+R or F5)");
+            _btnRefresh = CreatePillButton("⟳", "Reload (Ctrl+R)", 36);
+            _btnRefresh.Font = new Font("Segoe UI", 12F, FontStyle.Regular);
             _btnRefresh.Click += delegate { if (ActiveTab != null) ActiveTab.Reload(); };
 
-            _btnHome = CreateNavButton("⌂", "Home Page");
+            _btnHome = CreatePillButton("⌂", "Start Page", 36);
+            _btnHome.Font = new Font("Segoe UI", 12F, FontStyle.Regular);
             _btnHome.Click += delegate { if (ActiveTab != null) ActiveTab.LoadHomePage(); };
 
-            // Omnibox / Address Bar Pill
-            _omniboxPanel = new Panel();
-            _omniboxPanel.BackColor = ColorOmnibox;
-            _omniboxPanel.Height = 34;
-            _omniboxPanel.Padding = new Padding(10, 4, 8, 4);
+            // Omnibar (Floating Frosted Capsule)
+            _omnibarPanel = new Panel();
+            _omnibarPanel.BackColor = ColorOmnibarBg;
+            _omnibarPanel.Height = 36;
+            _omnibarPanel.Padding = new Padding(12, 4, 10, 4);
 
             _lockIcon = new Label();
-            _lockIcon.Text = "🔒";
-            _lockIcon.Font = new Font("Segoe UI", 10F);
-            _lockIcon.ForeColor = Color.FromArgb(46, 204, 113);
+            _lockIcon.Text = "✦";
+            _lockIcon.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+            _lockIcon.ForeColor = ColorAccentCyan;
             _lockIcon.AutoSize = true;
             _lockIcon.Dock = DockStyle.Left;
             _lockIcon.Cursor = Cursors.Hand;
+            var lockTip = new ToolTip();
+            lockTip.SetToolTip(_lockIcon, "Aether Quantum Security Active");
 
             _txtUrl = new TextBox();
             _txtUrl.BorderStyle = BorderStyle.None;
-            _txtUrl.BackColor = ColorOmnibox;
-            _txtUrl.ForeColor = Color.White;
-            _txtUrl.Font = new Font("Segoe UI", 10F);
+            _txtUrl.BackColor = ColorOmnibarBg;
+            _txtUrl.ForeColor = ColorTextWhite;
+            _txtUrl.Font = new Font("Segoe UI", 9.5F);
             _txtUrl.Dock = DockStyle.Fill;
             _txtUrl.KeyDown += (s, e) =>
             {
@@ -136,7 +148,7 @@ namespace SimpleBrowser
             _txtUrl.Enter += delegate { _txtUrl.SelectAll(); };
 
             _btnStar = new Button();
-            _btnStar.Text = "☆";
+            _btnStar.Text = "★";
             _btnStar.Font = new Font("Segoe UI", 11F);
             _btnStar.FlatStyle = FlatStyle.Flat;
             _btnStar.FlatAppearance.BorderSize = 0;
@@ -147,83 +159,88 @@ namespace SimpleBrowser
             _btnStar.Click += delegate { ToggleBookmarkCurrent(); };
 
             _btnGo = new Button();
-            _btnGo.Text = "➔";
-            _btnGo.Font = new Font("Segoe UI", 10F);
+            _btnGo.Text = "→";
+            _btnGo.Font = new Font("Segoe UI", 11F);
             _btnGo.FlatStyle = FlatStyle.Flat;
             _btnGo.FlatAppearance.BorderSize = 0;
-            _btnGo.ForeColor = ColorBraveOrange;
+            _btnGo.ForeColor = ColorAccentCyan;
             _btnGo.Dock = DockStyle.Right;
             _btnGo.Width = 28;
             _btnGo.Cursor = Cursors.Hand;
             _btnGo.Click += delegate { NavigateToInput(); };
 
-            _omniboxPanel.Controls.Add(_txtUrl);
-            _omniboxPanel.Controls.Add(_lockIcon);
-            _omniboxPanel.Controls.Add(_btnStar);
-            _omniboxPanel.Controls.Add(_btnGo);
+            _omnibarPanel.Controls.Add(_txtUrl);
+            _omnibarPanel.Controls.Add(_lockIcon);
+            _omnibarPanel.Controls.Add(_btnStar);
+            _omnibarPanel.Controls.Add(_btnGo);
 
-            // Paint orange border on Omnibox
-            _omniboxPanel.Paint += (s, e) =>
+            // Specular border on Omnibar
+            _omnibarPanel.Paint += (s, e) =>
             {
-                using (var pen = new Pen(Color.FromArgb(60, 64, 84), 1))
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using (var path = CreateRoundedRectanglePath(new Rectangle(0, 0, _omnibarPanel.Width - 1, _omnibarPanel.Height - 1), 16))
+                using (var pen = new Pen(ColorOmnibarBorder, 1.2f))
                 {
-                    e.Graphics.DrawRectangle(pen, 0, 0, _omniboxPanel.Width - 1, _omniboxPanel.Height - 1);
+                    e.Graphics.DrawPath(pen, path);
                 }
             };
 
-            // Brave Shields Lion Button
-            _btnShields = new Button();
-            _btnShields.Text = "🦁";
-            _btnShields.Font = new Font("Segoe UI", 13F);
-            _btnShields.FlatStyle = FlatStyle.Flat;
-            _btnShields.FlatAppearance.BorderSize = 0;
-            _btnShields.BackColor = Color.FromArgb(251, 84, 43);
-            _btnShields.ForeColor = Color.White;
-            _btnShields.Size = new Size(34, 34);
-            _btnShields.Cursor = Cursors.Hand;
-            var tip = new ToolTip();
-            tip.SetToolTip(_btnShields, "Brave Shields - Trackers & Ads Blocked");
-            _btnShields.Click += delegate { ShowBraveShields(); };
+            // Aether Shield Capsule
+            _btnShield = new Button();
+            _btnShield.Text = "✦ Shield";
+            _btnShield.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            _btnShield.FlatStyle = FlatStyle.Flat;
+            _btnShield.FlatAppearance.BorderSize = 0;
+            _btnShield.BackColor = Color.FromArgb(18, 26, 38);
+            _btnShield.ForeColor = ColorAccentCyan;
+            _btnShield.Size = new Size(84, 34);
+            _btnShield.Cursor = Cursors.Hand;
+            _btnShield.MouseEnter += delegate { _btnShield.BackColor = Color.FromArgb(24, 38, 56); };
+            _btnShield.MouseLeave += delegate { _btnShield.BackColor = Color.FromArgb(18, 26, 38); };
+            var shieldTip = new ToolTip();
+            shieldTip.SetToolTip(_btnShield, "Aether Quantum Shield & Privacy Telemetry");
+            _btnShield.Click += delegate { ShowAetherShield(); };
 
-            _btnHistory = CreateNavButton("🕒", "Browsing History (Ctrl+H)");
+            _btnHistory = CreatePillButton("🕒", "History (Ctrl+H)", 36);
             _btnHistory.Click += delegate { ShowHistory(); };
 
-            _btnSource = CreateNavButton("</>", "Page Source (Ctrl+U)");
+            _btnSource = CreatePillButton("⌥", "Source Inspector (Ctrl+U)", 36);
             _btnSource.Click += delegate { ShowPageSource(); };
 
-            _btnMenu = CreateNavButton("☰", "Brave Menu");
-            _btnMenu.Click += delegate { ShowBraveMenu(); };
+            _btnMenu = CreatePillButton("•••", "Aether Menu", 38);
+            _btnMenu.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            _btnMenu.Click += delegate { ShowAetherMenu(); };
 
             // Assemble Nav Panel
             _navPanel.Controls.Add(_btnMenu);
             _navPanel.Controls.Add(_btnSource);
             _navPanel.Controls.Add(_btnHistory);
-            _navPanel.Controls.Add(_btnShields);
-            _navPanel.Controls.Add(_omniboxPanel);
+            _navPanel.Controls.Add(_btnShield);
+            _navPanel.Controls.Add(_omnibarPanel);
             _navPanel.Controls.Add(_btnHome);
             _navPanel.Controls.Add(_btnRefresh);
             _navPanel.Controls.Add(_btnForward);
             _navPanel.Controls.Add(_btnBack);
 
-            // 3. BOOKMARKS BAR
+            // 3. BOOKMARKS BAR (Frosted glass pills)
             _bookmarksBar = new FlowLayoutPanel();
             _bookmarksBar.Dock = DockStyle.Top;
             _bookmarksBar.Height = 32;
-            _bookmarksBar.BackColor = ColorBookmarksBar;
-            _bookmarksBar.Padding = new Padding(8, 3, 8, 3);
+            _bookmarksBar.BackColor = Color.FromArgb(14, 15, 23);
+            _bookmarksBar.Padding = new Padding(12, 2, 12, 2);
             _bookmarksBar.WrapContents = false;
             _bookmarksBar.AutoScroll = false;
 
             // 4. STATUS BAR
             _statusBar = new StatusStrip();
-            _statusBar.BackColor = ColorOmnibox;
-            _statusLabel = new ToolStripStatusLabel("🦁 Brave Ready");
+            _statusBar.BackColor = Color.FromArgb(8, 9, 14);
+            _statusLabel = new ToolStripStatusLabel("✦ Aether Quantum Engine Ready");
             _statusLabel.ForeColor = ColorTextMuted;
             _statusLabel.Spring = true;
             _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
             _statusBar.Items.Add(_statusLabel);
 
-            // 5. Layout Setup
+            // 5. Hierarchy
             Controls.Add(_tabControl);
             Controls.Add(_bookmarksBar);
             Controls.Add(_navPanel);
@@ -233,19 +250,19 @@ namespace SimpleBrowser
             LayoutNavControls();
         }
 
-        private Button CreateNavButton(string text, string tooltip)
+        private Button CreatePillButton(string text, string tooltip, int width)
         {
             var btn = new Button();
             btn.Text = text;
-            btn.Font = new Font("Segoe UI", 11F);
+            btn.Font = new Font("Segoe UI", 10.5F);
             btn.FlatStyle = FlatStyle.Flat;
             btn.FlatAppearance.BorderSize = 0;
-            btn.BackColor = ColorNavBar;
-            btn.ForeColor = Color.White;
-            btn.Size = new Size(34, 34);
+            btn.BackColor = ColorToolbar;
+            btn.ForeColor = ColorTextMuted;
+            btn.Size = new Size(width, 34);
             btn.Cursor = Cursors.Hand;
-            btn.MouseEnter += delegate { btn.BackColor = ColorButtonHover; };
-            btn.MouseLeave += delegate { btn.BackColor = ColorNavBar; };
+            btn.MouseEnter += delegate { btn.BackColor = ColorButtonHover; btn.ForeColor = ColorTextWhite; };
+            btn.MouseLeave += delegate { btn.BackColor = ColorToolbar; btn.ForeColor = ColorTextMuted; };
             var tip = new ToolTip();
             tip.SetToolTip(btn, tooltip);
             return btn;
@@ -253,41 +270,39 @@ namespace SimpleBrowser
 
         private void LayoutNavControls()
         {
-            int left = 8;
-            int btnSize = 34;
+            int left = 12;
             int gap = 4;
 
-            _btnBack.Location = new Point(left, 7);
-            left += btnSize + gap;
-            _btnForward.Location = new Point(left, 7);
-            left += btnSize + gap;
-            _btnRefresh.Location = new Point(left, 7);
-            left += btnSize + gap;
-            _btnHome.Location = new Point(left, 7);
-            left += btnSize + gap + 4;
+            _btnBack.Location = new Point(left, 9);
+            left += _btnBack.Width + gap;
+            _btnForward.Location = new Point(left, 9);
+            left += _btnForward.Width + gap;
+            _btnRefresh.Location = new Point(left, 9);
+            left += _btnRefresh.Width + gap;
+            _btnHome.Location = new Point(left, 9);
+            left += _btnHome.Width + gap + 8;
 
-            int right = _navPanel.Width - 8;
-            _btnMenu.Location = new Point(right - btnSize, 7);
-            right -= (btnSize + gap);
-            _btnSource.Location = new Point(right - btnSize, 7);
-            right -= (btnSize + gap);
-            _btnHistory.Location = new Point(right - btnSize, 7);
-            right -= (btnSize + gap);
-            _btnShields.Location = new Point(right - btnSize, 7);
-            right -= (btnSize + gap + 4);
+            int right = _navPanel.Width - 12;
+            _btnMenu.Location = new Point(right - _btnMenu.Width, 9);
+            right -= (_btnMenu.Width + gap);
+            _btnSource.Location = new Point(right - _btnSource.Width, 9);
+            right -= (_btnSource.Width + gap);
+            _btnHistory.Location = new Point(right - _btnHistory.Width, 9);
+            right -= (_btnHistory.Width + gap);
+            _btnShield.Location = new Point(right - _btnShield.Width, 9);
+            right -= (_btnShield.Width + gap + 8);
 
-            int omniboxWidth = Math.Max(200, right - left);
-            _omniboxPanel.Location = new Point(left, 7);
-            _omniboxPanel.Size = new Size(omniboxWidth, 34);
+            int omnibarWidth = Math.Max(220, right - left);
+            _omnibarPanel.Location = new Point(left, 8);
+            _omnibarPanel.Size = new Size(omnibarWidth, 36);
 
-            _txtUrl.Location = new Point(28, 7);
-            _txtUrl.Width = omniboxWidth - 85;
+            _txtUrl.Location = new Point(32, 9);
+            _txtUrl.Width = omnibarWidth - 92;
 
-            // Reposition New Tab button next to last tab
             int tabCount = _tabControl.TabCount;
             int tabWidth = _tabControl.ItemSize.Width;
-            int plusX = Math.Min(_tabControl.Width - 40, tabCount * tabWidth + 10);
-            _btnNewTabHeader.Location = new Point(plusX, 2);
+            int plusX = Math.Min(_tabControl.Width - 45, tabCount * tabWidth + 12);
+            _btnNewTabHeader.Location = new Point(plusX, 4);
         }
 
         private void OnFormResized(object sender, EventArgs e)
@@ -295,7 +310,7 @@ namespace SimpleBrowser
             LayoutNavControls();
         }
 
-        // Custom Brave Tab Rendering
+        // Apple-style Pill Tab Rendering
         private void OnTabControlDrawItem(object sender, DrawItemEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -304,50 +319,68 @@ namespace SimpleBrowser
             Rectangle tabRect = _tabControl.GetTabRect(e.Index);
             bool isSelected = (e.Index == _tabControl.SelectedIndex);
 
-            Color bgColor = isSelected ? ColorActiveTab : ColorInactiveTab;
-            using (var brush = new SolidBrush(bgColor))
-            {
-                g.FillRectangle(brush, tabRect);
-            }
+            // Tab pill bounding box
+            Rectangle pillRect = new Rectangle(tabRect.Left + 4, tabRect.Top + 4, tabRect.Width - 8, tabRect.Height - 8);
 
-            if (isSelected)
+            using (var path = CreateRoundedRectanglePath(pillRect, 10))
             {
-                // Brave Orange Accent top border on active tab
-                using (var pen = new Pen(ColorBraveOrange, 2.5f))
+                if (isSelected)
                 {
-                    g.DrawLine(pen, tabRect.Left, tabRect.Top + 1, tabRect.Right, tabRect.Top + 1);
+                    using (var brush = new LinearGradientBrush(pillRect, Color.FromArgb(28, 32, 48), Color.FromArgb(20, 23, 34), LinearGradientMode.Vertical))
+                    {
+                        g.FillPath(brush, path);
+                    }
+                    using (var pen = new Pen(Color.FromArgb(60, 68, 96), 1.2f))
+                    {
+                        g.DrawPath(pen, path);
+                    }
+                }
+                else
+                {
+                    using (var brush = new SolidBrush(ColorTabInactive))
+                    {
+                        g.FillPath(brush, path);
+                    }
+                    using (var pen = new Pen(Color.FromArgb(26, 29, 40), 1f))
+                    {
+                        g.DrawPath(pen, path);
+                    }
                 }
             }
-            else
+
+            // Glowing Icon
+            string icon = isSelected ? "✦" : "○";
+            using (var font = new Font("Segoe UI", 9F, FontStyle.Bold))
+            using (var brush = new SolidBrush(isSelected ? ColorAccentCyan : ColorTextMuted))
             {
-                // Subtle divider between inactive tabs
-                using (var pen = new Pen(Color.FromArgb(45, 48, 65), 1))
-                {
-                    g.DrawLine(pen, tabRect.Right - 1, tabRect.Top + 8, tabRect.Right - 1, tabRect.Bottom - 8);
-                }
+                g.DrawString(icon, font, brush, pillRect.Left + 10, pillRect.Top + 7);
             }
 
-            // Draw Favicon / Globe icon
-            string icon = "🦁";
-            using (var font = new Font("Segoe UI", 9F))
-            using (var brush = new SolidBrush(Color.White))
-            {
-                g.DrawString(icon, font, brush, tabRect.Left + 8, tabRect.Top + 9);
-            }
-
-            // Draw Tab Title
+            // Tab Title
             string title = _tabControl.TabPages[e.Index].Text;
-            Rectangle textRect = new Rectangle(tabRect.Left + 30, tabRect.Top + 9, tabRect.Width - 60, tabRect.Height - 12);
-            Color textColor = isSelected ? Color.White : ColorTextMuted;
+            Rectangle textRect = new Rectangle(pillRect.Left + 28, pillRect.Top + 6, pillRect.Width - 54, pillRect.Height - 12);
+            Color textColor = isSelected ? ColorTextWhite : ColorTextMuted;
             TextRenderer.DrawText(g, title, Font, textRect, textColor, TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
 
-            // Draw Close Button '✕'
-            Rectangle closeRect = new Rectangle(tabRect.Right - 22, tabRect.Top + 10, 16, 16);
-            using (var brush = new SolidBrush(isSelected ? Color.White : ColorTextMuted))
-            using (var font = new Font("Segoe UI", 8.5F, FontStyle.Bold))
+            // Close Button '✕'
+            Rectangle closeRect = new Rectangle(pillRect.Right - 20, pillRect.Top + 7, 14, 14);
+            using (var brush = new SolidBrush(isSelected ? Color.FromArgb(180, 185, 200) : Color.FromArgb(80, 85, 100)))
+            using (var font = new Font("Segoe UI", 8F, FontStyle.Bold))
             {
                 g.DrawString("✕", font, brush, closeRect.X, closeRect.Y);
             }
+        }
+
+        private static GraphicsPath CreateRoundedRectanglePath(Rectangle rect, int radius)
+        {
+            var path = new GraphicsPath();
+            int diameter = radius * 2;
+            path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
+            path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);
+            path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private void OnTabControlMouseDown(object sender, MouseEventArgs e)
@@ -355,7 +388,8 @@ namespace SimpleBrowser
             for (int i = 0; i < _tabControl.TabPages.Count; i++)
             {
                 Rectangle tabRect = _tabControl.GetTabRect(i);
-                Rectangle closeRect = new Rectangle(tabRect.Right - 24, tabRect.Top + 8, 20, 20);
+                Rectangle pillRect = new Rectangle(tabRect.Left + 4, tabRect.Top + 4, tabRect.Width - 8, tabRect.Height - 8);
+                Rectangle closeRect = new Rectangle(pillRect.Right - 24, pillRect.Top + 4, 22, 22);
 
                 if (closeRect.Contains(e.Location))
                 {
@@ -432,16 +466,14 @@ namespace SimpleBrowser
             if (_bookmarkManager.IsBookmarked(url))
             {
                 _bookmarkManager.RemoveBookmark(url);
-                _btnStar.Text = "☆";
                 _btnStar.ForeColor = ColorTextMuted;
                 _statusLabel.Text = "Removed bookmark: " + url;
             }
             else
             {
                 _bookmarkManager.AddBookmark(title, url);
-                _btnStar.Text = "★";
-                _btnStar.ForeColor = ColorBraveOrange;
-                _statusLabel.Text = "🦁 Bookmarked: " + title;
+                _btnStar.ForeColor = ColorAccentCyan;
+                _statusLabel.Text = "✦ Saved to Aether Bookmarks: " + title;
             }
             RebuildBookmarksBar();
         }
@@ -458,14 +490,14 @@ namespace SimpleBrowser
                 btn.AutoSize = true;
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
-                btn.BackColor = Color.FromArgb(43, 46, 64);
-                btn.ForeColor = Color.White;
+                btn.BackColor = Color.FromArgb(20, 22, 33);
+                btn.ForeColor = Color.FromArgb(210, 215, 230);
                 btn.Font = new Font("Segoe UI", 8.5F);
                 btn.Cursor = Cursors.Hand;
-                btn.Margin = new Padding(2, 2, 4, 2);
+                btn.Margin = new Padding(3, 2, 4, 2);
                 btn.Height = 24;
-                btn.MouseEnter += delegate { btn.BackColor = Color.FromArgb(58, 62, 86); };
-                btn.MouseLeave += delegate { btn.BackColor = Color.FromArgb(43, 46, 64); };
+                btn.MouseEnter += delegate { btn.BackColor = Color.FromArgb(32, 36, 54); btn.ForeColor = ColorAccentCyan; };
+                btn.MouseLeave += delegate { btn.BackColor = Color.FromArgb(20, 22, 33); btn.ForeColor = Color.FromArgb(210, 215, 230); };
 
                 var currentUrl = b.Url;
                 btn.Click += delegate
@@ -503,18 +535,17 @@ namespace SimpleBrowser
                 _txtUrl.Text = displayUrl;
 
                 bool isBookmarked = !string.IsNullOrEmpty(displayUrl) && _bookmarkManager.IsBookmarked(displayUrl);
-                _btnStar.Text = isBookmarked ? "★" : "☆";
-                _btnStar.ForeColor = isBookmarked ? ColorBraveOrange : ColorTextMuted;
+                _btnStar.ForeColor = isBookmarked ? ColorAccentCyan : ColorTextMuted;
 
-                Text = (string.IsNullOrEmpty(tab.Text) ? "Brave Browser" : tab.Text + " - Brave");
+                Text = (string.IsNullOrEmpty(tab.Text) ? "Aether" : tab.Text + " — Aether");
             }
             else
             {
                 _btnBack.Enabled = false;
                 _btnForward.Enabled = false;
                 _txtUrl.Text = "";
-                _btnStar.Text = "☆";
-                Text = "Brave Browser";
+                _btnStar.ForeColor = ColorTextMuted;
+                Text = "Aether";
             }
             _tabControl.Invalidate();
         }
@@ -526,8 +557,7 @@ namespace SimpleBrowser
                 string displayUrl = url == "about:home" ? "" : url;
                 _txtUrl.Text = displayUrl;
                 bool bookmarked = _bookmarkManager.IsBookmarked(url);
-                _btnStar.Text = bookmarked ? "★" : "☆";
-                _btnStar.ForeColor = bookmarked ? ColorBraveOrange : ColorTextMuted;
+                _btnStar.ForeColor = bookmarked ? ColorAccentCyan : ColorTextMuted;
             }
         }
 
@@ -535,7 +565,7 @@ namespace SimpleBrowser
         {
             if (tab == ActiveTab)
             {
-                Text = title + " - Brave";
+                Text = title + " — Aether";
             }
             if (!string.IsNullOrEmpty(tab.CurrentUrl) && tab.CurrentUrl != "about:home")
             {
@@ -558,17 +588,17 @@ namespace SimpleBrowser
         {
             if (tab == ActiveTab)
             {
-                _statusLabel.Text = string.IsNullOrEmpty(status) ? "🦁 Brave Ready" : status;
+                _statusLabel.Text = string.IsNullOrEmpty(status) ? "✦ Aether Quantum Engine Ready" : status;
             }
         }
 
-        private void ShowBraveShields()
+        private void ShowAetherShield()
         {
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
-            var shields = new BraveShieldsForm(url);
-            Point pt = _btnShields.PointToScreen(new Point(0, _btnShields.Height + 4));
-            shields.Location = new Point(Math.Max(10, pt.X - 280), pt.Y);
-            shields.Show(this);
+            var shield = new AetherShieldForm(url);
+            Point pt = _btnShield.PointToScreen(new Point(0, _btnShield.Height + 6));
+            shield.Location = new Point(Math.Max(10, pt.X - 250), pt.Y);
+            shield.Show(this);
         }
 
         private void ShowHistory()
@@ -597,32 +627,30 @@ namespace SimpleBrowser
             }
         }
 
-        private void ShowBraveMenu()
+        private void ShowAetherMenu()
         {
             var menu = new ContextMenuStrip();
-            menu.BackColor = ColorOmnibox;
-            menu.ForeColor = Color.White;
+            menu.BackColor = ColorOmnibarBg;
+            menu.ForeColor = ColorTextWhite;
 
-            var newTabItem = new ToolStripMenuItem("New Tab\tCtrl+T", null, delegate { AddNewTab(); });
-            var bookmarksItem = new ToolStripMenuItem("Bookmark Page\tCtrl+D", null, delegate { ToggleBookmarkCurrent(); });
-            var historyItem = new ToolStripMenuItem("History\tCtrl+H", null, delegate { ShowHistory(); });
-            var sourceItem = new ToolStripMenuItem("Page Source\tCtrl+U", null, delegate { ShowPageSource(); });
-            var shieldsItem = new ToolStripMenuItem("🦁 Brave Shields", null, delegate { ShowBraveShields(); });
-            var aboutItem = new ToolStripMenuItem("About Brave Browser Edition", null, delegate
+            var newTabItem = new ToolStripMenuItem("New Tab\t⌘T", null, delegate { AddNewTab(); });
+            var bookmarksItem = new ToolStripMenuItem("Bookmark Page\t⌘D", null, delegate { ToggleBookmarkCurrent(); });
+            var historyItem = new ToolStripMenuItem("History\t⌘H", null, delegate { ShowHistory(); });
+            var sourceItem = new ToolStripMenuItem("Inspect Source\t⌘U", null, delegate { ShowPageSource(); });
+            var shieldItem = new ToolStripMenuItem("✦ Aether Shield...", null, delegate { ShowAetherShield(); });
+            var aboutItem = new ToolStripMenuItem("About Aether Browser...", null, delegate
             {
                 MessageBox.Show(
-                    "Brave Browser UI Edition v1.5\n\n" +
-                    "A fast, private, and lightweight browser built from scratch.\n\n" +
-                    "Features:\n" +
-                    "• Brave Dark Theme & Brave Orange styling\n" +
-                    "• Multi-tab browsing with quick close\n" +
-                    "• Brave Shields popup & protection panel\n" +
-                    "• Smart Omnibox with Brave Search default\n" +
-                    "• Bookmarks bar with instant access\n" +
-                    "• Browsing history manager (Ctrl+H)\n" +
-                    "• HTML Source inspector (Ctrl+U)\n" +
-                    "• Brave-style Start Page with live clock & statistics\n",
-                    "About Brave Edition",
+                    "Aether Browser 2.0\n\n" +
+                    "A quantum-minimalist web browser designed with Cupertino simplicity & precision.\n\n" +
+                    "Highlights:\n" +
+                    "• Floating Frosted Glass UI with VisionOS styling\n" +
+                    "• Ambient Cosmic Start Page with live clock\n" +
+                    "• Apple-style Rounded Pill Tabs with quick close\n" +
+                    "• Aether Quantum Shield with privacy telemetry\n" +
+                    "• Edge Chromium 155 engine underneath\n\n" +
+                    "Crafted for speed, elegance, and pure focus.",
+                    "About Aether",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             });
@@ -632,10 +660,10 @@ namespace SimpleBrowser
             menu.Items.Add(historyItem);
             menu.Items.Add(sourceItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(shieldsItem);
+            menu.Items.Add(shieldItem);
             menu.Items.Add(aboutItem);
 
-            Point pt = _btnMenu.PointToScreen(new Point(0, _btnMenu.Height));
+            Point pt = _btnMenu.PointToScreen(new Point(0, _btnMenu.Height + 4));
             menu.Show(pt);
         }
 

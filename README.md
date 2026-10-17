@@ -1,79 +1,94 @@
-# Brave Browser UI Edition 🦁
+# AETHER ✦
 
-A lightweight, fast desktop web browser built from scratch in C# with a sleek UI inspired by **Brave Browser**.
+> **The Quantum Minimalist Web Browser**  
+> Designed with Cupertino Simplicity, Futuristic Precision, and Zero Footprint.
 
-Zero external dependencies: runs and compiles immediately on Windows with no need to install SDKs, Node, or Python.
-
----
-
-## 🎨 Brave-Inspired UI & Features
-
-- **🦁 Brave Dark Theme Palette**: Deep dark purple/slate (`#1B1C26` and `#282A3A`) with Brave Lion Orange (`#FB542B`) accent highlights.
-- **📑 Custom-Drawn Tabs**: Tabs sit at the top with orange active tab indicator, tab close buttons (`✕`), and a new tab button (`+`).
-- **🛡️ Brave Shields Popup**: Distinctive lion button (`🦁`) next to the Omnibox. Clicking it opens a Brave Shields popup displaying protection status, blocked trackers count, HTTPS upgrade, and safe script execution.
-- **🔍 Omnibox (Brave Search default)**: Dark rounded address bar with security lock status (`🔒`), one-click bookmark star (`★`), and automatic fallback to **Brave Search** (`search.brave.com`).
-- **🕒 Brave Start Page (New Tab)**:
-  - Big live digital clock and greeting ("Good evening").
-  - Live tracker & ad blocking statistics widgets.
-  - Centered Brave Search input box.
-  - Shortcut tiles with hover animations.
-- **⭐ Bookmarks Toolbar**: Persistent dark bookmarks bar with right-click delete support.
-- **📜 Browsing History**: Searchable and filterable history viewer (`Ctrl+H`).
-- **💻 Page Source Inspector**: Built-in HTML source viewer (`Ctrl+U`) with copy button.
+Aether is a fast, standalone desktop web browser built from scratch in C# with an Apple-inspired futuristic interface (VisionOS-style frosted glass, floating pill tabs, ambient cosmic start page, and Cupertino typography). Powered under the hood by modern Microsoft Edge Chromium 155.
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## ✦ Design Philosophy & Features
+
+- **🍎 Apple-Inspired Human Interface**:
+  - **VisionOS Floating Pill Tabs**: Rounded capsule tabs with active frosted glass illumination, smooth circular close buttons (`✕`), and dynamic title truncation.
+  - **Floating Omnibar**: A centered frosted glass pill with specular border highlights, security indicator (`✦`), and ambient cyan glow on focus.
+  - **Minimalist Iconography**: Clean Apple-style chevrons (`‹`, `›`), reload (`⟳`), start page (`⌂`), star bookmark (`★`), and triple-dot menu (`•••`).
+  - **Deep Obsidian Palette**: Ultra-refined dark tones (`#07080B`, `#0A0B10`, `#11131C`) with ethereal cyan (`#00F2FE`) and ultraviolet (`#9D4EDD`) ambient lighting.
+
+- **🌌 Ambient Cosmic Start Page**:
+  - Thin minimalist digital clock with gradient typography.
+  - Organic ambient glowing nebulae drifting softly in the background.
+  - Floating Omnibar with intelligent URL / search query detection.
+  - VisionOS-style frosted glass shortcut cards with specular borders and subtle hover lift (Apple, GitHub, YouTube, Reddit, Wikipedia, Hacker News).
+  - Telemetry badge showing security status and engine stats.
+
+- **🛡️ Aether Quantum Shield**:
+  - Frosted glass privacy card providing real-time telemetry on tracker neutralization, fingerprint cloaking, HTTPS enforcement, and zero-telemetry isolation.
+
+- **⚡ Modern Chromium 155 Engine**:
+  - Full modern web standard support: ES6+, WebSockets, modern CSS grid/flexbox, HTML5 audio/video, and WASM.
+  - No blank pages, no rendering bugs.
+
+- **⭐ Frosted Bookmarks & History**:
+  - Translucent bookmarks pill bar with right-click removal.
+  - Minimalist browsing history dialog (`⌘H`) with live instant filter.
+  - Full HTML source inspector (`⌥ Source` / `⌘U`) with 1-click clipboard copy.
+
+---
+
+## ⌨️ Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
-| `Ctrl + T` | Open a new tab |
-| `Ctrl + W` | Close the active tab |
-| `Ctrl + R` or `F5` | Reload / refresh page |
-| `Ctrl + L` | Focus and select URL address bar |
-| `Ctrl + D` | Bookmark or unbookmark current page |
-| `Ctrl + H` | Open Browsing History |
-| `Ctrl + U` | View page source code |
+| `Ctrl + T` (⌘T) | Open a new pill tab |
+| `Ctrl + W` (⌘W) | Close the active tab |
+| `Ctrl + R` (⌘R) or `F5` | Reload / refresh page |
+| `Ctrl + L` (⌘L) | Focus and highlight Omnibar |
+| `Ctrl + D` (⌘D) | Save / remove bookmark |
+| `Ctrl + H` (⌘H) | Open Browsing History |
+| `Ctrl + U` (⌘U) | Inspect page HTML source |
 | `Alt + Left` | Navigate back |
 | `Alt + Right` | Navigate forward |
-| `Enter` in Omnibox | Search Brave or navigate to address |
+| `Enter` in Omnibar | Navigate to address or query |
 
 ---
 
-## 🚀 How to Run
+## 🚀 Quick Launch
 
 ### 1-Click Launch
 Double-click `run.bat` or run:
 ```cmd
 run.bat
 ```
-This automatically compiles the browser (if not already built) and launches it.
+This automatically compiles the browser (if not already built) and launches `AuraBrowser.exe`.
 
-### Build Manually
-Run:
+### Manual Build
 ```cmd
 build.bat
 ```
-The compiled executable will be output to `bin\AuraBrowser.exe`.
+Compiled standalone binary is placed in `bin\AuraBrowser.exe`.
 
 ---
 
-## 📁 Repository Structure
+## 📁 Architecture
 
 ```
 simple-web-browser/
 ├── src/
-│   ├── Program.cs             # Entry point & registry modern browser emulation
-│   ├── MainForm.cs            # Brave UI main window, custom tabs, Omnibox, navigation
-│   ├── BraveShieldsForm.cs    # Brave Shields tracker protection popup
-│   ├── BrowserTab.cs          # Web rendering tab, lifecycle & Brave Search fallback
-│   ├── BookmarkManager.cs     # Bookmarks manager & persistence
+│   ├── Program.cs             # Entry point & crash recovery
+│   ├── MainForm.cs            # Aether Apple-style UI, floating pill tabs & Omnibar
+│   ├── AetherShieldForm.cs    # Aether Quantum Shield frosted glass modal
+│   ├── BrowserTab.cs          # Chromium 155 WebView2 rendering lifecycle
+│   ├── BookmarkManager.cs     # Bookmarks persistence and management
 │   ├── HistoryManager.cs      # Browsing history persistence
-│   ├── HistoryForm.cs         # Brave-themed history dialog with search & filter
-│   ├── SourceViewerForm.cs    # Brave-themed HTML source code inspector
-│   └── HomePage.cs            # Brave-style New Tab Start Page
-├── bin/                       # Executable output directory
-├── build.bat                  # Instant compilation script
+│   ├── HistoryForm.cs         # Frosted glass browsing history UI
+│   ├── SourceViewerForm.cs    # Obsidian HTML source code inspector
+│   └── HomePage.cs            # Ambient Cosmic Start Page (VisionOS style)
+├── bin/                       # Output directory for AuraBrowser.exe
+├── lib/                       # WebView2 Chromium libraries
+├── scripts/
+│   └── get_webview2.ps1       # Automated engine dependency installer
+├── build.bat                  # Instant 1-click build script
 ├── run.bat                    # 1-click launch script
 ├── .gitignore
 └── README.md

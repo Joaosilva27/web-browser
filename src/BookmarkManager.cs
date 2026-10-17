@@ -84,7 +84,7 @@ namespace SimpleBrowser
             else
             {
                 // Default starter bookmarks
-                _bookmarks.Add(new BookmarkItem("🦁 Brave", "https://search.brave.com"));
+                _bookmarks.Add(new BookmarkItem("✦ Apple", "https://apple.com"));
                 _bookmarks.Add(new BookmarkItem("GitHub", "https://github.com"));
                 _bookmarks.Add(new BookmarkItem("YouTube", "https://www.youtube.com"));
                 _bookmarks.Add(new BookmarkItem("Wikipedia", "https://www.wikipedia.org"));

@@ -6,7 +6,7 @@ if not exist bin\AuraBrowser.exe (
 )
 
 if exist bin\AuraBrowser.exe (
-    echo Launching Brave Browser Edition...
+    echo Launching Aether Browser...
     start "" bin\AuraBrowser.exe
 ) else (
     echo [ERROR] bin\AuraBrowser.exe not found!

@@ -12,21 +12,21 @@ namespace SimpleBrowser
 
         public SourceViewerForm(string url, string htmlSource)
         {
-            Text = "Page Source: " + url + " - Brave Inspector";
-            Size = new Size(840, 620);
+            Text = "Source Inspector — " + url;
+            Size = new Size(880, 640);
             StartPosition = FormStartPosition.CenterParent;
-            BackColor = Color.FromArgb(24, 25, 36);
+            BackColor = Color.FromArgb(10, 11, 16);
             ForeColor = Color.White;
 
             var topPanel = new Panel();
             topPanel.Dock = DockStyle.Top;
-            topPanel.Height = 48;
-            topPanel.BackColor = Color.FromArgb(34, 36, 50);
-            topPanel.Padding = new Padding(12, 10, 12, 10);
+            topPanel.Height = 52;
+            topPanel.BackColor = Color.FromArgb(17, 19, 28);
+            topPanel.Padding = new Padding(14, 10, 14, 10);
 
             _infoLabel = new Label();
-            _infoLabel.Text = "🦁 " + url;
-            _infoLabel.ForeColor = Color.FromArgb(160, 165, 180);
+            _infoLabel.Text = "✦ " + url;
+            _infoLabel.ForeColor = Color.FromArgb(134, 134, 139);
             _infoLabel.AutoEllipsis = true;
             _infoLabel.Dock = DockStyle.Fill;
             _infoLabel.TextAlign = ContentAlignment.MiddleLeft;
@@ -37,8 +37,8 @@ namespace SimpleBrowser
             _copyButton.Width = 120;
             _copyButton.FlatStyle = FlatStyle.Flat;
             _copyButton.FlatAppearance.BorderSize = 0;
-            _copyButton.BackColor = Color.FromArgb(251, 84, 43); // Brave Orange
-            _copyButton.ForeColor = Color.White;
+            _copyButton.BackColor = Color.FromArgb(0, 242, 254);
+            _copyButton.ForeColor = Color.FromArgb(10, 12, 18);
             _copyButton.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             _copyButton.Cursor = Cursors.Hand;
             _copyButton.Click += delegate
@@ -46,7 +46,7 @@ namespace SimpleBrowser
                 if (!string.IsNullOrEmpty(_textBox.Text))
                 {
                     Clipboard.SetText(_textBox.Text);
-                    MessageBox.Show("Page source copied to clipboard!", "Brave Inspector", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Source code copied to clipboard.", "Aether Inspector", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             };
 
@@ -59,7 +59,7 @@ namespace SimpleBrowser
             _textBox.ScrollBars = ScrollBars.Both;
             _textBox.ReadOnly = true;
             _textBox.Font = new Font("Consolas", 10F);
-            _textBox.BackColor = Color.FromArgb(18, 19, 28);
+            _textBox.BackColor = Color.FromArgb(12, 13, 20);
             _textBox.ForeColor = Color.FromArgb(220, 225, 235);
             _textBox.BorderStyle = BorderStyle.None;
             _textBox.Text = htmlSource ?? string.Empty;
