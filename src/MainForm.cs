@@ -265,6 +265,15 @@ namespace SimpleBrowser
             SyncUrl();
             SyncNavState();
             SyncBookmarked();
+            SyncShields();
+        }
+
+        private void SyncShields()
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+            int count = AdBlocker.BlockedCount;
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                string.Format("document.getElementById('shields-count') && (document.getElementById('shields-count').innerText = '{0}');", count));
         }
 
         private void SyncTabs()

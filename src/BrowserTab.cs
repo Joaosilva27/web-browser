@@ -64,6 +64,18 @@ namespace SimpleBrowser
 
                 _isInitialized = true;
 
+                // Hook up AdBlocker & Brave Shields
+                await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AdBlocker.GetAdBlockInjectionScript());
+                _webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+                _webView.CoreWebView2.WebResourceRequested += (s, args) =>
+                {
+                    if (AdBlocker.ShouldBlock(args.Request.Uri))
+                    {
+                        var response = _webView.CoreWebView2.Environment.CreateWebResourceResponse(null, 403, "Blocked by Brave Shields", "");
+                        args.Response = response;
+                    }
+                };
+
                 _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
                 _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
                 _webView.CoreWebView2.SourceChanged += OnSourceChanged;
