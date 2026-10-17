@@ -11,11 +11,19 @@ namespace SimpleBrowser
         [STAThread]
         static void Main()
         {
-            EnsureModernBrowserEmulation();
+            try
+            {
+                EnsureModernBrowserEmulation();
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new MainForm());
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText("crash.log", ex.ToString());
+                MessageBox.Show("Fatal Error: " + ex.ToString(), "Browser Crash", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private static void EnsureModernBrowserEmulation()
