@@ -94,13 +94,13 @@ namespace SimpleBrowser
             _navPanel.Padding = new Padding(8, 6, 8, 6);
 
             _btnBack = CreateNavButton("←", "Back (Alt+Left)");
-            _btnBack.Click += delegate { if (ActiveTab != null && ActiveTab.Browser != null) ActiveTab.Browser.GoBack(); };
+            _btnBack.Click += delegate { if (ActiveTab != null) ActiveTab.GoBack(); };
 
             _btnForward = CreateNavButton("→", "Forward (Alt+Right)");
-            _btnForward.Click += delegate { if (ActiveTab != null && ActiveTab.Browser != null) ActiveTab.Browser.GoForward(); };
+            _btnForward.Click += delegate { if (ActiveTab != null) ActiveTab.GoForward(); };
 
             _btnRefresh = CreateNavButton("⟳", "Reload (Ctrl+R or F5)");
-            _btnRefresh.Click += delegate { if (ActiveTab != null && ActiveTab.Browser != null) ActiveTab.Browser.Refresh(); };
+            _btnRefresh.Click += delegate { if (ActiveTab != null) ActiveTab.Reload(); };
 
             _btnHome = CreateNavButton("⌂", "Home Page");
             _btnHome.Click += delegate { if (ActiveTab != null) ActiveTab.LoadHomePage(); };
@@ -654,7 +654,7 @@ namespace SimpleBrowser
             else if (e.Control && e.KeyCode == Keys.R || e.KeyCode == Keys.F5)
             {
                 e.SuppressKeyPress = true;
-                if (ActiveTab != null && ActiveTab.Browser != null) ActiveTab.Browser.Refresh();
+                if (ActiveTab != null) ActiveTab.Reload();
             }
             else if (e.Control && e.KeyCode == Keys.L)
             {

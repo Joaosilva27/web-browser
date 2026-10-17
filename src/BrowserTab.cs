@@ -1,28 +1,35 @@
 using System;
 using System.Drawing;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace SimpleBrowser
 {
     public class BrowserTab : TabPage
     {
-        private WebBrowser _browser;
+        private WebView2 _webView;
         private ProgressBar _progressBar;
+        private string _pendingUrl;
+        private bool _isInitialized;
 
         public event Action<BrowserTab, string> UrlChanged;
         public event Action<BrowserTab, string> TitleChanged;
         public event Action<BrowserTab> StateChanged;
         public event Action<BrowserTab, string> StatusTextChanged;
 
-        public WebBrowser Browser { get { return _browser; } }
+        public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
-        public bool CanGoBack { get { return _browser != null && _browser.CanGoBack; } }
-        public bool CanGoForward { get { return _browser != null && _browser.CanGoForward; } }
+        public bool CanGoBack { get { return _webView != null && _isInitialized && _webView.CanGoBack; } }
+        public bool CanGoForward { get { return _webView != null && _isInitialized && _webView.CanGoForward; } }
 
         public BrowserTab(string initialUrl = null)
         {
             Text = "New Tab";
-            BackColor = Color.FromArgb(32, 34, 37);
+            BackColor = Color.FromArgb(27, 28, 38);
 
             _progressBar = new ProgressBar();
             _progressBar.Dock = DockStyle.Top;
@@ -30,35 +37,67 @@ namespace SimpleBrowser
             _progressBar.Visible = false;
             _progressBar.Style = ProgressBarStyle.Continuous;
 
-            _browser = new WebBrowser();
-            _browser.Dock = DockStyle.Fill;
-            _browser.ScriptErrorsSuppressed = true;
-            _browser.IsWebBrowserContextMenuEnabled = true;
+            _webView = new WebView2();
+            _webView.Dock = DockStyle.Fill;
+            _webView.DefaultBackgroundColor = Color.FromArgb(17, 16, 25);
 
-            _browser.Navigating += OnNavigating;
-            _browser.Navigated += OnNavigated;
-            _browser.DocumentCompleted += OnDocumentCompleted;
-            _browser.ProgressChanged += OnProgressChanged;
-            _browser.StatusTextChanged += OnStatusTextChanged;
+            _pendingUrl = string.IsNullOrEmpty(initialUrl) ? "about:home" : initialUrl;
 
-            Controls.Add(_browser);
+            Controls.Add(_webView);
             Controls.Add(_progressBar);
 
-            if (string.IsNullOrEmpty(initialUrl) || initialUrl == "about:blank")
+            InitEngine();
+        }
+
+        private async void InitEngine()
+        {
+            try
             {
-                LoadHomePage();
+                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser", "WebView2Profile");
+                if (!Directory.Exists(userDataFolder))
+                {
+                    Directory.CreateDirectory(userDataFolder);
+                }
+
+                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                await _webView.EnsureCoreWebView2Async(env);
+
+                _isInitialized = true;
+
+                _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
+                _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+                _webView.CoreWebView2.SourceChanged += OnSourceChanged;
+                _webView.CoreWebView2.DocumentTitleChanged += OnDocumentTitleChanged;
+
+                if (!string.IsNullOrEmpty(_pendingUrl))
+                {
+                    Navigate(_pendingUrl);
+                }
+                else
+                {
+                    LoadHomePage();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Navigate(initialUrl);
+                MessageBox.Show("Failed to initialize Chromium engine: " + ex.Message, "Browser Engine Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         public void LoadHomePage()
         {
             CurrentUrl = "about:home";
-            _browser.DocumentText = HomePage.GetHtml();
             Text = "New Tab";
+
+            if (_isInitialized && _webView.CoreWebView2 != null)
+            {
+                _webView.NavigateToString(HomePage.GetHtml());
+            }
+            else
+            {
+                _pendingUrl = "about:home";
+            }
+
             if (TitleChanged != null) TitleChanged(this, "New Tab");
             if (UrlChanged != null) UrlChanged(this, "");
             if (StateChanged != null) StateChanged(this);
@@ -99,12 +138,19 @@ namespace SimpleBrowser
                 }
             }
 
+            CurrentUrl = destination;
+
+            if (!_isInitialized || _webView.CoreWebView2 == null)
+            {
+                _pendingUrl = destination;
+                return;
+            }
+
             try
             {
-                CurrentUrl = destination;
-                _progressBar.Value = 10;
+                _progressBar.Value = 30;
                 _progressBar.Visible = true;
-                _browser.Navigate(destination);
+                _webView.CoreWebView2.Navigate(destination);
             }
             catch (Exception ex)
             {
@@ -112,68 +158,101 @@ namespace SimpleBrowser
             }
         }
 
+        public void GoBack()
+        {
+            if (_isInitialized && _webView.CanGoBack)
+            {
+                _webView.GoBack();
+            }
+        }
+
+        public void GoForward()
+        {
+            if (_isInitialized && _webView.CanGoForward)
+            {
+                _webView.GoForward();
+            }
+        }
+
+        public void Reload()
+        {
+            if (_isInitialized && _webView.CoreWebView2 != null)
+            {
+                _webView.Reload();
+            }
+        }
+
         public string GetSourceHtml()
         {
-            try
+            if (_isInitialized && _webView.CoreWebView2 != null)
             {
-                if (_browser.Document != null)
+                try
                 {
-                    var doc = _browser.Document.DomDocument as dynamic;
-                    if (doc != null && doc.documentElement != null)
+                    var task = _webView.CoreWebView2.ExecuteScriptAsync("document.documentElement.outerHTML");
+                    if (task.Wait(2000))
                     {
-                        return doc.documentElement.outerHTML;
+                        string raw = task.Result;
+                        if (!string.IsNullOrEmpty(raw))
+                        {
+                            return Regex.Unescape(raw.Trim('"'));
+                        }
                     }
                 }
+                catch
+                {
+                    // Fallback
+                }
             }
-            catch
-            {
-                // Fallback to DocumentText
-            }
-            return _browser.DocumentText;
+            return "";
         }
 
-        private void OnNavigating(object sender, WebBrowserNavigatingEventArgs e)
+        private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
-            _progressBar.Value = 20;
+            _progressBar.Value = 40;
             _progressBar.Visible = true;
-            if (e.Url != null)
+
+            if (!string.IsNullOrEmpty(e.Uri) && !e.Uri.StartsWith("data:text/html"))
             {
-                string target = e.Url.ToString();
-                if (!target.StartsWith("about:blank"))
-                {
-                    CurrentUrl = target;
-                    if (UrlChanged != null) UrlChanged(this, CurrentUrl);
-                }
+                CurrentUrl = e.Uri;
+                if (UrlChanged != null) UrlChanged(this, CurrentUrl);
             }
             if (StateChanged != null) StateChanged(this);
         }
 
-        private void OnNavigated(object sender, WebBrowserNavigatedEventArgs e)
-        {
-            if (e.Url != null)
-            {
-                string url = e.Url.ToString();
-                if (!url.StartsWith("about:blank"))
-                {
-                    CurrentUrl = url;
-                    if (UrlChanged != null) UrlChanged(this, CurrentUrl);
-                }
-            }
-            if (StateChanged != null) StateChanged(this);
-        }
-
-        private void OnDocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
+        private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _progressBar.Visible = false;
             _progressBar.Value = 0;
 
-            string title = _browser.DocumentTitle;
+            if (!e.IsSuccess && StatusTextChanged != null)
+            {
+                StatusTextChanged(this, "Status: " + e.WebErrorStatus.ToString());
+            }
+            if (StateChanged != null) StateChanged(this);
+        }
+
+        private void OnSourceChanged(object sender, CoreWebView2SourceChangedEventArgs e)
+        {
+            if (_webView.CoreWebView2 != null)
+            {
+                string src = _webView.CoreWebView2.Source;
+                if (!string.IsNullOrEmpty(src) && !src.StartsWith("data:text/html"))
+                {
+                    CurrentUrl = src;
+                    if (UrlChanged != null) UrlChanged(this, CurrentUrl);
+                }
+            }
+            if (StateChanged != null) StateChanged(this);
+        }
+
+        private void OnDocumentTitleChanged(object sender, object e)
+        {
+            string title = _webView.CoreWebView2 != null ? _webView.CoreWebView2.DocumentTitle : null;
             if (string.IsNullOrWhiteSpace(title))
             {
                 title = CurrentUrl == "about:home" ? "New Tab" : CurrentUrl;
             }
 
-            // Truncate long tab titles
             string shortTitle = title;
             if (shortTitle.Length > 20)
             {
@@ -183,26 +262,6 @@ namespace SimpleBrowser
 
             if (TitleChanged != null) TitleChanged(this, title);
             if (StateChanged != null) StateChanged(this);
-        }
-
-        private void OnProgressChanged(object sender, WebBrowserProgressChangedEventArgs e)
-        {
-            if (e.MaximumProgress > 0 && e.CurrentProgress >= 0)
-            {
-                int val = (int)((e.CurrentProgress * 100) / e.MaximumProgress);
-                if (val >= 0 && val <= 100)
-                {
-                    _progressBar.Value = Math.Min(100, val);
-                }
-            }
-        }
-
-        private void OnStatusTextChanged(object sender, EventArgs e)
-        {
-            if (StatusTextChanged != null)
-            {
-                StatusTextChanged(this, _browser.StatusText);
-            }
         }
     }
 }

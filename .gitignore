@@ -1,9 +1,11 @@
 # Build outputs
 bin/
 obj/
+lib/
 *.exe
 *.dll
 *.pdb
+*.zip
 
 # User data
 *.user

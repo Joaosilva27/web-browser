@@ -289,6 +289,26 @@ namespace SimpleBrowser
         }
         updateClock();
         setInterval(updateClock, 1000);
+
+        var form = document.querySelector('.search-form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                var input = document.querySelector('.search-input');
+                if (!input) return;
+                var val = input.value.trim();
+                if (!val) {
+                    e.preventDefault();
+                    return;
+                }
+                if (val.indexOf('http://') === 0 || val.indexOf('https://') === 0) {
+                    window.location.href = val;
+                    e.preventDefault();
+                } else if (val.indexOf('.') !== -1 && val.indexOf(' ') === -1) {
+                    window.location.href = 'https://' + val;
+                    e.preventDefault();
+                }
+            });
+        }
     </script>
 </body>
 </html>";
