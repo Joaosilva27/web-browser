@@ -90,6 +90,61 @@ namespace SimpleBrowser
             return null;
         }
 
+        public static bool GetBool(Dictionary<string, object> obj, string key, bool fallback)
+        {
+            if (obj == null) return fallback;
+
+            object value;
+            if (!obj.TryGetValue(key, out value) || value == null) return fallback;
+
+            if (value is bool) return (bool)value;
+
+            var text = value as string;
+            if (text != null)
+            {
+                bool parsed;
+                if (bool.TryParse(text, out parsed)) return parsed;
+                return fallback;
+            }
+
+            var convertible = value as IConvertible;
+            if (convertible != null)
+            {
+                try { return convertible.ToBoolean(CultureInfo.InvariantCulture); }
+                catch { }
+            }
+            return fallback;
+        }
+
+        public static int GetInt(Dictionary<string, object> obj, string key, int fallback)
+        {
+            if (obj == null) return fallback;
+
+            object value;
+            if (!obj.TryGetValue(key, out value) || value == null) return fallback;
+
+            var text = value as string;
+            if (text != null)
+            {
+                int parsed;
+                if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) return parsed;
+                double asDouble;
+                if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out asDouble))
+                {
+                    return (int)Math.Round(asDouble);
+                }
+                return fallback;
+            }
+
+            var convertible = value as IConvertible;
+            if (convertible != null)
+            {
+                try { return (int)Math.Round(convertible.ToDouble(CultureInfo.InvariantCulture)); }
+                catch { }
+            }
+            return fallback;
+        }
+
         public static Dictionary<string, object> Obj(params object[] pairs)
         {
             var result = new Dictionary<string, object>();

@@ -17,6 +17,7 @@ namespace SimpleBrowser
         private bool _isInitialized;
         private bool _isLoading;
         private bool _isHome;
+        private bool _isSettings;
 
         public event Action<BrowserTab, string> UrlChanged;
         public event Action<BrowserTab, string> TitleChanged;
@@ -25,6 +26,9 @@ namespace SimpleBrowser
         public event Action<BrowserTab> IconChanged;
         public event EventHandler<CoreWebView2NewWindowRequestedEventArgs> NewWindowRequested;
         public event Action<BrowserTab> WindowCloseRequested;
+
+        /// <summary>Raised by the about:settings page with a JSON message.</summary>
+        public event Action<BrowserTab, string> SettingsMessage;
 
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
@@ -66,15 +70,20 @@ namespace SimpleBrowser
                     : CoreWebView2PreferredColorScheme.Light;
 
                 // Let WebView2 offer to save logins and autofill data. Both live
-                // in the persistent profile, so they survive restarts.
-                _webView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = true;
-                _webView.CoreWebView2.Settings.IsGeneralAutofillEnabled = true;
+                // in the persistent profile, so they survive restarts, and both
+                // follow whatever the settings page says.
+                ApplyAppSettings();
 
                 // Hook up AdBlocker & Brave Shields
                 AdBlocker.Initialize();
-                await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AdBlocker.GetAdBlockInjectionScript());
+                if (Settings.Current.Shields)
+                {
+                    await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AdBlocker.GetAdBlockInjectionScript());
+                }
                 _webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
                 _webView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
+
+                _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
                 _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
                 _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
@@ -102,6 +111,7 @@ namespace SimpleBrowser
         public void LoadHomePage()
         {
             _isHome = true;
+            _isSettings = false;
             CurrentUrl = "about:home";
             _topLevelUri = null;
             Text = "New Tab";
@@ -122,6 +132,95 @@ namespace SimpleBrowser
             if (StateChanged != null) StateChanged(this);
         }
 
+        /// <summary>Shows Aura's own settings page in this tab.</summary>
+        public void LoadSettingsPage()
+        {
+            _isHome = false;
+            _isSettings = true;
+            CurrentUrl = SettingsPage.Address;
+            _topLevelUri = null;
+            Text = "Settings";
+            DisplayTitle = "Settings";
+            FaviconDataUrl = null;
+
+            if (_isInitialized && _webView.CoreWebView2 != null)
+            {
+                _webView.NavigateToString(SettingsPage.GetHtml());
+            }
+            else
+            {
+                _pendingUrl = SettingsPage.Address;
+            }
+
+            if (IconChanged != null) IconChanged(this);
+            if (TitleChanged != null) TitleChanged(this, "Settings");
+            if (UrlChanged != null) UrlChanged(this, SettingsPage.Address);
+            if (StateChanged != null) StateChanged(this);
+        }
+
+        public bool IsSettingsPage
+        {
+            get { return _isSettings; }
+        }
+
+        /// <summary>
+        /// Applies the settings that reach into a live WebView. Called when the
+        /// tab starts and again whenever something changes on the settings page.
+        /// </summary>
+        public void ApplyAppSettings()
+        {
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = Settings.Current.SavePasswords;
+                _webView.CoreWebView2.Settings.IsGeneralAutofillEnabled = Settings.Current.Autofill;
+                _webView.ZoomFactor = Settings.Current.ZoomFactor;
+            }
+            catch
+            {
+                // A tab that is mid-teardown can refuse; the next one picks it up.
+            }
+        }
+
+        /// <summary>Redraws the settings page, used after a reset.</summary>
+        public void ReloadSettingsPage()
+        {
+            if (!_isSettings || !_isInitialized || _webView.CoreWebView2 == null) return;
+            _webView.NavigateToString(SettingsPage.GetHtml());
+        }
+
+        /// <summary>Feeds the live Shields numbers back to the settings page.</summary>
+        public void RefreshSettingsStats()
+        {
+            if (!_isSettings || !_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    SettingsPage.StatsScript(AdBlocker.RuleCount, AdBlocker.BlockedCount));
+            }
+            catch
+            {
+                // The page may be gone; nothing to report.
+            }
+        }
+
+        /// <summary>Shows a one-line result on the settings page.</summary>
+        public void NotifySettingsPage(string message)
+        {
+            if (!_isSettings || !_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(SettingsPage.NoticeScript(message));
+            }
+            catch
+            {
+                // The page may be gone; nothing to report.
+            }
+        }
+
         /// <summary>Re-applies the current light/dark theme to this tab.</summary>
         public void ApplyTheme()
         {
@@ -137,7 +236,7 @@ namespace SimpleBrowser
                     : CoreWebView2PreferredColorScheme.Light;
             }
 
-            if (_isInitialized && _webView.CoreWebView2 != null && _isHome)
+            if (_isInitialized && _webView.CoreWebView2 != null && (_isHome || _isSettings))
             {
                 _webView.CoreWebView2.ExecuteScriptAsync(
                     "document.body.className='" + (Theme.IsDark ? "dark" : "light") + "';");
@@ -161,6 +260,13 @@ namespace SimpleBrowser
                 return;
             }
 
+            if (destination.Equals(SettingsPage.Address, StringComparison.OrdinalIgnoreCase) ||
+                destination.Equals("settings", StringComparison.OrdinalIgnoreCase))
+            {
+                LoadSettingsPage();
+                return;
+            }
+
             // Check if input looks like a search query
             if (!destination.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
                 !destination.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
@@ -169,7 +275,7 @@ namespace SimpleBrowser
             {
                 if (destination.Contains(" ") || !destination.Contains("."))
                 {
-                    destination = "https://search.brave.com/search?q=" + Uri.EscapeDataString(destination);
+                    destination = Settings.Current.Engine.Build(destination);
                 }
                 else
                 {
@@ -181,6 +287,7 @@ namespace SimpleBrowser
             CurrentUrl = destination;
             _topLevelUri = destination;
             _isHome = false;
+            _isSettings = false;
 
             if (!_isInitialized || _webView.CoreWebView2 == null)
             {
@@ -322,6 +429,7 @@ namespace SimpleBrowser
                 if (!e.Uri.StartsWith("data:text/html") && !e.Uri.StartsWith("about:"))
                 {
                     _isHome = false;
+                    _isSettings = false;
                 }
 
                 if (!e.Uri.StartsWith("data:text/html"))
@@ -418,6 +526,29 @@ namespace SimpleBrowser
 
             if (TitleChanged != null) TitleChanged(this, title);
             if (StateChanged != null) StateChanged(this);
+        }
+
+        /// <summary>
+        /// The settings page talks to the app through this channel. Only Aura's
+        /// own page may use it: the tab has to be showing about:settings and the
+        /// message has to come from a document Aura itself wrote, so a website
+        /// loaded in this tab can never change a setting.
+        /// </summary>
+        private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            if (!_isSettings) return;
+            if (!IsInternalSource(e.Source)) return;
+
+            var handler = SettingsMessage;
+            if (handler != null) handler(this, e.WebMessageAsJson);
+        }
+
+        private static bool IsInternalSource(string source)
+        {
+            if (string.IsNullOrEmpty(source)) return true;
+
+            return source.StartsWith("about:", StringComparison.OrdinalIgnoreCase)
+                || source.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

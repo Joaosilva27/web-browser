@@ -68,9 +68,9 @@ namespace SimpleBrowser
                 ? Color.FromArgb(52, 52, 56)
                 : Color.FromArgb(245, 245, 247);
 
-            card.Controls.Add(CreateRow("Filter rules loaded", AdBlocker.RuleCount.ToString("N0"), 11));
-            card.Controls.Add(CreateRow("HTTPS upgrade", "On", 44));
-            card.Controls.Add(CreateRow("Fingerprinting protection", "Strict", 77));
+            card.Controls.Add(CreateRow("Ad & tracker blocking", Settings.Current.Shields ? "On" : "Off", 11));
+            card.Controls.Add(CreateRow("Filter rules loaded", AdBlocker.RuleCount.ToString("N0"), 44));
+            card.Controls.Add(CreateRow("Filter lists", "EasyList + Privacy", 77));
 
             var listTitle = new Label();
             listTitle.Text = "MOST BLOCKED";

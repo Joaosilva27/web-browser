@@ -51,8 +51,10 @@ namespace SimpleBrowser
 
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = true;
-            core.Settings.IsPasswordAutosaveEnabled = true;
-            core.Settings.IsGeneralAutofillEnabled = true;
+            core.Settings.IsPasswordAutosaveEnabled = Settings.Current.SavePasswords;
+            core.Settings.IsGeneralAutofillEnabled = Settings.Current.Autofill;
+
+            _webView.ZoomFactor = Settings.Current.ZoomFactor;
 
             core.Profile.PreferredColorScheme = Theme.IsDark
                 ? CoreWebView2PreferredColorScheme.Dark

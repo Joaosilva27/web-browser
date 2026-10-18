@@ -302,18 +302,18 @@ namespace SimpleBrowser
 <body class='__THEME__'>
 
     <div class='stage'>
-        <div class='date' id='date'></div>
-        <div class='clock' id='clock'>--:--</div>
+        <div class='date' id='date' style='__CLOCK_STYLE__'></div>
+        <div class='clock' id='clock' style='__CLOCK_STYLE__'>--:--</div>
 
-        <form class='search' id='search' action='https://search.brave.com/search' method='GET'>
+        <form class='search' id='search' action='__SEARCH_ACTION__' method='GET'>
             <svg class='search-icon' viewBox='0 0 24 24'><circle cx='11' cy='11' r='6.5'/><path d='M16 16l4.5 4.5'/></svg>
-            <input class='search-input' id='search-input' type='text' name='q'
-                   placeholder='Search Brave or enter a website' autocomplete='off'
+            <input class='search-input' id='search-input' type='text' name='__SEARCH_PARAM__'
+                   placeholder='Search __SEARCH_NAME__ or enter a website' autocomplete='off'
                    autocapitalize='off' spellcheck='false' />
             <button class='search-go' type='submit'>Search</button>
         </form>
 
-        <div class='favorites'>
+        <div class='favorites' style='__TILES_STYLE__'>
 __FAVORITES__
         </div>
     </div>
@@ -370,10 +370,17 @@ __FAVORITES__
 </body>
 </html>";
 
+            var engine = Settings.Current.Engine;
+
             return html
                 .Replace("__THEME__", dark ? "dark" : "light")
                 .Replace("__FAVORITES__", RenderFavorites())
-                .Replace("__SHIELDS__", shieldsNote);
+                .Replace("__SHIELDS__", shieldsNote)
+                .Replace("__SEARCH_ACTION__", Attribute(engine.BaseUrl))
+                .Replace("__SEARCH_PARAM__", Attribute(engine.QueryParam))
+                .Replace("__SEARCH_NAME__", Escape(engine.ShortName))
+                .Replace("__CLOCK_STYLE__", Settings.Current.ShowClock ? "" : "display:none")
+                .Replace("__TILES_STYLE__", Settings.Current.ShowTiles ? "" : "display:none");
         }
 
         /// <summary>

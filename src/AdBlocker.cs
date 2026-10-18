@@ -166,6 +166,11 @@ namespace SimpleBrowser
         /// <param name="resourceType">script, image, stylesheet, document, subdocument, xhr, media, font, other.</param>
         public static bool ShouldBlock(string uri, string topLevelUri, string resourceType)
         {
+            if (!Settings.Current.Shields)
+            {
+                return false;
+            }
+
             if (string.IsNullOrEmpty(uri))
             {
                 return false;

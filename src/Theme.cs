@@ -30,6 +30,24 @@ namespace SimpleBrowser
             }
         }
 
+        /// <summary>
+        /// Reads the stored preference without changing the live one. Used once
+        /// to migrate the old registry setting into the settings file.
+        /// </summary>
+        public static string ReadStoredPreference()
+        {
+            try
+            {
+                string mode = Registry.GetValue(PreferenceKey, "Theme", "system") as string;
+                if (mode == "dark" || mode == "light" || mode == "system") return mode;
+            }
+            catch
+            {
+                // Registry unavailable.
+            }
+            return null;
+        }
+
         public static void LoadPreference()
         {
             try

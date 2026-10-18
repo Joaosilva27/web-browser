@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -82,6 +83,7 @@ namespace SimpleBrowser
         public MainForm()
         {
             Theme.LoadPreference();
+            Settings.Current.ApplyThemePreference();
             _bookmarkManager = new BookmarkManager();
             _historyManager = new HistoryManager();
 
@@ -151,6 +153,35 @@ namespace SimpleBrowser
             _shieldsTimer.Start();
 
             Theme.Changed += ApplyTheme;
+            Settings.Changed += OnSettingsChanged;
+        }
+
+        /// <summary>
+        /// A setting changed on the settings page (or from the Appearance menu).
+        /// Everything that reaches into a live WebView is re-applied here.
+        /// </summary>
+        private void OnSettingsChanged()
+        {
+            foreach (TabPage page in _tabControl.TabPages)
+            {
+                var tab = page as BrowserTab;
+                if (tab == null) continue;
+
+                tab.ApplyAppSettings();
+
+                // The start page draws the search engine, clock and tiles from
+                // the settings, so it has to be redrawn to show a change.
+                if (tab.CurrentUrl == "about:home")
+                {
+                    tab.LoadHomePage();
+                }
+                else if (tab.IsSettingsPage)
+                {
+                    tab.RefreshSettingsStats();
+                }
+            }
+
+            SyncShields();
         }
 
         private void ApplyTheme()
@@ -286,6 +317,9 @@ namespace SimpleBrowser
                     case "about":
                         ShowAbout();
                         break;
+                    case "settings":
+                        OpenSettings();
+                        break;
                     case "focus_url":
                         FocusUrlBar();
                         break;
@@ -330,6 +364,7 @@ namespace SimpleBrowser
             tab.IconChanged += OnTabIconChanged;
             tab.NewWindowRequested += OnTabNewWindowRequested;
             tab.WindowCloseRequested += OnTabWindowCloseRequested;
+            tab.SettingsMessage += OnTabSettingsMessage;
 
             _tabControl.TabPages.Add(tab);
             _tabControl.SelectedTab = tab;
@@ -674,6 +709,7 @@ namespace SimpleBrowser
                     case 0x48: action = "history"; break;                          // Ctrl+H
                     case 0x55: action = "source"; break;                           // Ctrl+U
                     case 0x4F: if (shift) action = "bookmarks"; break;             // Ctrl+Shift+O
+                    case 0xBC: action = "settings"; break;                         // Ctrl+,
                     case 0x09: action = shift ? "prev_tab" : "next_tab"; break;    // Ctrl+Tab
                 }
             }
@@ -705,6 +741,7 @@ namespace SimpleBrowser
                 case "history": ShowHistory(); break;
                 case "bookmarks": ShowBookmarks(); break;
                 case "source": ShowPageSource(); break;
+                case "settings": OpenSettings(); break;
                 case "back": if (ActiveTab != null) ActiveTab.GoBack(); break;
                 case "forward": if (ActiveTab != null) ActiveTab.GoForward(); break;
                 case "next_tab": CycleTab(1); break;
@@ -762,6 +799,153 @@ namespace SimpleBrowser
                     tab.LoadHomePage();
                 }
             }
+        }
+
+        // ── Settings page ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Opens Aura's settings page, reusing the tab that already holds it so
+        /// Ctrl+, twice does not leave two copies behind.
+        /// </summary>
+        public void OpenSettings()
+        {
+            foreach (object page in _tabControl.TabPages)
+            {
+                var existing = page as BrowserTab;
+                if (existing != null && existing.IsSettingsPage)
+                {
+                    _tabControl.SelectedTab = existing;
+                    return;
+                }
+            }
+
+            AddNewTab(SettingsPage.Address);
+        }
+
+        /// <summary>
+        /// Handles one message from the settings page. The page only reports a
+        /// key and a value; deciding what that means stays here, and only keys
+        /// Aura knows about are accepted.
+        /// </summary>
+        private void OnTabSettingsMessage(BrowserTab tab, string json)
+        {
+            if (string.IsNullOrEmpty(json)) return;
+
+            string action = ExtractJsonField(json, "action");
+            if (string.IsNullOrEmpty(action)) return;
+
+            switch (action)
+            {
+                case "set":
+                    Settings.Current.Set(ExtractJsonField(json, "key"), ExtractJsonValue(json, "value"));
+                    break;
+
+                case "stats":
+                    tab.RefreshSettingsStats();
+                    break;
+
+                case "reset":
+                    Settings.Current.ResetToDefaults();
+                    tab.ReloadSettingsPage();
+                    break;
+
+                case "open":
+                    ShowSettingsTarget(ExtractJsonField(json, "what"));
+                    break;
+
+                case "clear":
+                    ClearData(ExtractJsonField(json, "what"), tab);
+                    break;
+            }
+        }
+
+        private void ShowSettingsTarget(string what)
+        {
+            switch (what)
+            {
+                case "import": ShowImport(); break;
+                case "bookmarks": ShowBookmarks(); break;
+                case "history": ShowHistory(); break;
+                case "shields": ShowBraveShields(); break;
+            }
+        }
+
+        /// <summary>
+        /// Runs one of the "Clear" buttons on the settings page. Cookies and site
+        /// data are removed through WebView2's own profile API, so the profile on
+        /// disk really is emptied rather than just the app's own lists.
+        /// </summary>
+        private async void ClearData(string what, BrowserTab tab)
+        {
+            string message;
+
+            switch (what)
+            {
+                case "history":
+                    _historyManager.ClearHistory();
+                    message = "Browsing history cleared.";
+                    break;
+
+                case "searches":
+                    _historyManager.ClearSearches();
+                    message = "Search history cleared.";
+                    break;
+
+                case "cookies":
+                    await ClearProfileDataAsync(
+                        CoreWebView2BrowsingDataKinds.Cookies |
+                        CoreWebView2BrowsingDataKinds.LocalStorage |
+                        CoreWebView2BrowsingDataKinds.IndexedDb |
+                        CoreWebView2BrowsingDataKinds.WebSql |
+                        CoreWebView2BrowsingDataKinds.FileSystems |
+                        CoreWebView2BrowsingDataKinds.ServiceWorkers);
+                    message = "Cookies and site data cleared. You are signed out everywhere.";
+                    break;
+
+                case "cache":
+                    await ClearProfileDataAsync(
+                        CoreWebView2BrowsingDataKinds.DiskCache |
+                        CoreWebView2BrowsingDataKinds.CacheStorage);
+                    message = "Cache cleared.";
+                    break;
+
+                default:
+                    return;
+            }
+
+            if (tab != null) tab.NotifySettingsPage(message);
+        }
+
+        private async Task ClearProfileDataAsync(CoreWebView2BrowsingDataKinds kinds)
+        {
+            CoreWebView2Profile profile = ProfileForData();
+            if (profile == null) return;
+
+            try
+            {
+                await profile.ClearBrowsingDataAsync(kinds);
+            }
+            catch
+            {
+                // A profile that cannot be reached leaves the data in place; the
+                // page still says what happened.
+            }
+        }
+
+        private CoreWebView2Profile ProfileForData()
+        {
+            if (_chromeWebView != null && _chromeWebView.CoreWebView2 != null)
+            {
+                return _chromeWebView.CoreWebView2.Profile;
+            }
+
+            var tab = ActiveTab;
+            if (tab != null && tab.WebView != null && tab.WebView.CoreWebView2 != null)
+            {
+                return tab.WebView.CoreWebView2.Profile;
+            }
+
+            return null;
         }
 
         private void ShowPageSource()
@@ -925,9 +1109,9 @@ namespace SimpleBrowser
             var shieldItem = new ToolStripMenuItem("Aura Shields", null, delegate { ShowBraveShields(); });
 
             var appearanceItem = new ToolStripMenuItem("Appearance");
-            var lightItem = new ToolStripMenuItem("Light", null, delegate { Theme.SetPreference("light"); });
-            var darkItem = new ToolStripMenuItem("Dark", null, delegate { Theme.SetPreference("dark"); });
-            var systemItem = new ToolStripMenuItem("Use System Theme", null, delegate { Theme.SetPreference("system"); });
+            var lightItem = new ToolStripMenuItem("Light", null, delegate { Settings.Current.Set("theme", "light"); });
+            var darkItem = new ToolStripMenuItem("Dark", null, delegate { Settings.Current.Set("theme", "dark"); });
+            var systemItem = new ToolStripMenuItem("Use System Theme", null, delegate { Settings.Current.Set("theme", "system"); });
             appearanceItem.DropDownItems.Add(lightItem);
             appearanceItem.DropDownItems.Add(darkItem);
             appearanceItem.DropDownItems.Add(new ToolStripSeparator());
@@ -948,6 +1132,8 @@ namespace SimpleBrowser
             };
 
             var aboutItem = new ToolStripMenuItem("About Aura", null, delegate { ShowAbout(); });
+            var settingsItem = new ToolStripMenuItem("Settings\u2026", null, delegate { OpenSettings(); });
+            settingsItem.ShortcutKeyDisplayString = "Ctrl+,";
             var importItem = new ToolStripMenuItem("Import Browser Data\u2026", null, delegate { ShowImport(); });
             var quitItem = new ToolStripMenuItem("Quit Aura", null, delegate { Close(); });
 
@@ -960,6 +1146,7 @@ namespace SimpleBrowser
             menu.Items.Add(shieldItem);
             menu.Items.Add(appearanceItem);
             menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(settingsItem);
             menu.Items.Add(importItem);
             menu.Items.Add(aboutItem);
             menu.Items.Add(new ToolStripSeparator());
@@ -1064,6 +1251,35 @@ namespace SimpleBrowser
                 if (int.TryParse(match.Groups[1].Value, out val)) return val;
             }
             return -1;
+        }
+
+        /// <summary>
+        /// Reads a message value of any type, because the settings page sends
+        /// text, booleans and numbers through the same field. Returns null when
+        /// the field is missing, which the settings store treats as no change.
+        /// </summary>
+        private static object ExtractJsonValue(string json, string field)
+        {
+            string pattern = "\"" + field + "\"\\s*:\\s*(\"([^\"]*)\"|true|false|-?[0-9]+(?:\\.[0-9]+)?)";
+            var match = System.Text.RegularExpressions.Regex.Match(json, pattern);
+            if (!match.Success) return null;
+
+            string token = match.Groups[1].Value;
+            if (token == "true") return true;
+            if (token == "false") return false;
+            if (token.StartsWith("\"")) return match.Groups[2].Value;
+
+            int parsedInt;
+            if (int.TryParse(token, out parsedInt)) return parsedInt;
+
+            double parsedDouble;
+            if (double.TryParse(token, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out parsedDouble))
+            {
+                return parsedDouble;
+            }
+
+            return null;
         }
 
         [StructLayout(LayoutKind.Sequential)]
