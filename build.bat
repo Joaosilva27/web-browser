@@ -23,7 +23,7 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AuraBrowser.exe /r:System.dll,System.Core.dll,System.Windows.Forms.dll,System.Drawing.dll,Microsoft.CSharp.dll,lib\Microsoft.Web.WebView2.WinForms.dll,lib\Microsoft.Web.WebView2.Core.dll src\*.cs
+"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AuraBrowser.exe /r:System.dll,System.Core.dll,System.Windows.Forms.dll,System.Drawing.dll,Microsoft.CSharp.dll,System.Web.Extensions.dll,lib\Microsoft.Web.WebView2.WinForms.dll,lib\Microsoft.Web.WebView2.Core.dll src\*.cs
 
 if %ERRORLEVEL% EQU 0 (
     echo [SUCCESS] Built successfully: bin\AuraBrowser.exe
