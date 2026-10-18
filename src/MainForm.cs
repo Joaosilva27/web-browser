@@ -118,10 +118,14 @@ namespace SimpleBrowser
             DoubleBuffered = true;
             SetStyle(ControlStyles.ResizeRedraw, true);
 
-            // Top chrome WebView2: tab strip + toolbar, rendered as one HTML surface.
+            // The bookmarks bar shows the saved pages, and follows every change.
+            _bookmarkManager.Changed += OnBookmarksChanged;
+
+            // Top chrome WebView2: tab strip + toolbar (+ the bookmarks bar),
+            // rendered as one HTML surface.
             _chromeWebView = new WebView2();
             _chromeWebView.Dock = DockStyle.Top;
-            _chromeWebView.Height = Dpi.Px(ChromeHtml.ChromeHeight);
+            _chromeWebView.Height = ChromePx();
             _chromeWebView.DefaultBackgroundColor = Theme.ChromeTop;
 
             // Main Content Area
@@ -193,6 +197,7 @@ namespace SimpleBrowser
             }
 
             SyncShields();
+            SyncBookmarksBar();
         }
 
         private void ApplyTheme()
@@ -346,6 +351,39 @@ namespace SimpleBrowser
                     case "prev_tab":
                         CycleTab(-1);
                         break;
+                    case "bm_open":
+                        {
+                            string barUrl = ExtractJsonField(json, "url");
+                            if (string.IsNullOrEmpty(barUrl)) break;
+
+                            if (ExtractJsonBool(json, "newTab") && !string.Equals(barUrl, ActiveTabUrl(), StringComparison.OrdinalIgnoreCase))
+                            {
+                                AddNewTab(barUrl);
+                            }
+                            else if (ActiveTab != null)
+                            {
+                                ActiveTab.Navigate(barUrl);
+                                FocusContent();
+                            }
+                            break;
+                        }
+                    case "bm_folder":
+                        ShowBookmarkFolderMenu(ExtractJsonField(json, "path"),
+                            ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
+                        break;
+                    case "bm_folder_all":
+                        OpenFolderInTabs(ExtractJsonField(json, "path"));
+                        break;
+                    case "bm_more":
+                        ShowBookmarkOverflowMenu(ExtractJsonInt(json, "index"),
+                            ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
+                        break;
+                    case "bm_menu":
+                        ShowBookmarkBarItemMenu(json);
+                        break;
+                    case "bm_bar_menu":
+                        ShowBookmarksBarMenu(ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
+                        break;
                 }
             }
             catch
@@ -405,18 +443,46 @@ namespace SimpleBrowser
         {
             if (ActiveTab == null) return;
             string url = ActiveTab.CurrentUrl;
-            string title = ActiveTab.Text;
 
-            if (string.IsNullOrEmpty(url) || url == "about:home") return;
+            if (string.IsNullOrEmpty(url) || url == "about:home" || url == SettingsPage.Address) return;
 
+            // Already saved: the star takes it away again, as before.
             if (_bookmarkManager.IsBookmarked(url))
             {
                 _bookmarkManager.RemoveBookmark(url);
+                SyncBookmarked();
+                return;
             }
-            else
+
+            AddBookmarkDialog();
+        }
+
+        /// <summary>
+        /// The "add bookmark" sheet for the page in the active tab, so a new
+        /// bookmark can be named and filed instead of always landing at the top.
+        /// </summary>
+        private void AddBookmarkDialog()
+        {
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            string url = tab.CurrentUrl;
+            if (string.IsNullOrEmpty(url) || url == "about:home" || url == SettingsPage.Address) return;
+
+            string title = tab.Text;
+            if (string.IsNullOrEmpty(title)) title = url;
+
+            var existing = _bookmarkManager.Find(url);
+            string folder = existing != null ? existing.Folder : string.Empty;
+            if (existing != null) title = existing.Title;
+
+            using (var form = new AddBookmarkForm(_bookmarkManager, title, url, folder))
             {
-                _bookmarkManager.AddBookmark(title, url);
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+
+                _bookmarkManager.SetBookmark(form.BookmarkTitle, url, form.Folder, tab.FaviconDataUrl);
             }
+
             SyncBookmarked();
         }
 
@@ -427,6 +493,476 @@ namespace SimpleBrowser
             SyncNavState();
             SyncBookmarked();
             SyncShields();
+            SyncBookmarksBar();
+        }
+
+        /// <summary>
+        /// Height of the whole chrome, in physical pixels. The bookmarks bar only
+        /// takes room when it is switched on and has something to show.
+        /// </summary>
+        private int ChromePx()
+        {
+            int design = ChromeHtml.ChromeHeight;
+            if (BookmarksBarVisible()) design += ChromeHtml.BookmarksBarHeight;
+            return Dpi.Px(design);
+        }
+
+        /// <summary>
+        /// True when the bar should be on screen: enabled in the settings, and
+        /// holding at least one bookmark or folder.
+        /// </summary>
+        private bool BookmarksBarVisible()
+        {
+            if (!Settings.Current.ShowBookmarksBar) return false;
+            if (_bookmarkManager.GetRootBookmarks().Count > 0) return true;
+            return _bookmarkManager.GetChildFolders(null).Count > 0;
+        }
+
+        /// <summary>Re-measures the chrome and redraws the bookmarks bar.</summary>
+        private void SyncBookmarksBar()
+        {
+            if (_chromeWebView == null) return;
+
+            bool show = BookmarksBarVisible();
+
+            int height = ChromePx();
+            if (_chromeWebView.Height != height) _chromeWebView.Height = height;
+
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                string.Format("window.BraveAPI && window.BraveAPI.renderBookmarks({0}, {1});",
+                    show ? "true" : "false", BuildBarJson()));
+        }
+
+        /// <summary>
+        /// The bar's contents: top-level bookmarks in order, with the top-level
+        /// folders first, the way every browser shows them.
+        /// </summary>
+        private string BuildBarJson()
+        {
+            var items = new List<string>();
+
+            foreach (var entry in BarEntries())
+            {
+                if (entry.IsFolder)
+                {
+                    items.Add(string.Format("{{\"kind\":\"folder\",\"title\":\"{0}\",\"path\":\"{1}\"}}",
+                        EscapeJs(entry.Title), EscapeJs(entry.Path)));
+                }
+                else
+                {
+                    items.Add(string.Format(
+                        "{{\"kind\":\"bookmark\",\"title\":\"{0}\",\"url\":\"{1}\",\"icon\":\"{2}\"}}",
+                        EscapeJs(entry.Title), EscapeJs(entry.Url), EscapeJs(entry.Icon)));
+                }
+            }
+
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private void OnBookmarksChanged()
+        {
+            SyncBookmarksBar();
+            SyncBookmarked();
+        }
+
+        /// <summary>One row of the bookmarks bar, mirroring what the chrome draws.</summary>
+        private class BarEntry
+        {
+            public bool IsFolder;
+            public string Title;
+            public string Url;
+            public string Path;
+            public string Icon;
+        }
+
+        /// <summary>
+        /// The bar's contents, in the order it shows them: top-level folders
+        /// first, then the top-level bookmarks.
+        /// </summary>
+        private List<BarEntry> BarEntries()
+        {
+            var entries = new List<BarEntry>();
+
+            foreach (string folder in _bookmarkManager.GetChildFolders(null))
+            {
+                var folderEntry = new BarEntry();
+                folderEntry.IsFolder = true;
+                folderEntry.Title = BookmarkManager.NameOf(folder);
+                folderEntry.Path = folder;
+                entries.Add(folderEntry);
+            }
+
+            foreach (var bookmark in _bookmarkManager.GetRootBookmarks())
+            {
+                var entry = new BarEntry();
+                entry.Title = bookmark.Title;
+                entry.Url = bookmark.Url;
+                entry.Icon = bookmark.Icon;
+                entries.Add(entry);
+            }
+
+            return entries;
+        }
+
+        private string ActiveTabUrl()
+        {
+            return ActiveTab != null ? (ActiveTab.CurrentUrl ?? string.Empty) : string.Empty;
+        }
+
+        /// <summary>
+        /// A menu for the bookmarks bar, tracked in the same way as the ⋯ menu so
+        /// that a press outside it closes it. The menu is left to the garbage
+        /// collector rather than disposed: the framework still touches a
+        /// ToolStripDropDown while it is closing, and disposing it there throws.
+        /// </summary>
+        private ContextMenuStrip NewMenu()
+        {
+            if (_openMenu != null) CloseOpenMenu();
+
+            var menu = new ContextMenuStrip();
+            menu.BackColor = Theme.CardBackground;
+            menu.ForeColor = Theme.TextPrimary;
+            menu.Font = new Font("Segoe UI", 9.5F);
+            menu.ShowImageMargin = false;
+
+            menu.Closed += delegate
+            {
+                if (ReferenceEquals(_openMenu, menu)) _openMenu = null;
+                RemoveMenuMouseHook();
+            };
+
+            _openMenu = menu;
+            InstallMenuMouseHook();
+            return menu;
+        }
+
+        /// <summary>Shows a menu under a point the chrome reported, in CSS pixels.</summary>
+        private void ShowChromeMenu(ContextMenuStrip menu, int cssX, int cssY)
+        {
+            if (_chromeWebView == null) return;
+
+            int x = Math.Max(0, Math.Min(cssX, Width));
+            Point at = _chromeWebView.PointToScreen(new Point(Dpi.Px(x), Dpi.Px(Math.Max(0, cssY))));
+            menu.Show(at);
+        }
+
+        private void OpenBookmark(string url, bool newTab)
+        {
+            if (string.IsNullOrEmpty(url)) return;
+
+            if (newTab)
+            {
+                AddNewTab(url);
+                return;
+            }
+
+            if (ActiveTab != null)
+            {
+                ActiveTab.Navigate(url);
+                FocusContent();
+            }
+        }
+
+        /// <summary>A menu label that is never empty and never too long.</summary>
+        private static string MenuTitle(string title, string url)
+        {
+            string text = string.IsNullOrEmpty(title) ? url : title;
+            if (string.IsNullOrEmpty(text)) text = "Untitled";
+            if (text.Length > 64) text = text.Substring(0, 61) + "\u2026";
+            return text;
+        }
+
+        /// <summary>Fills a menu with a folder's subfolders and bookmarks, to any depth.</summary>
+        private void FillFolderItems(ToolStripItemCollection items, string folder)
+        {
+            foreach (string child in _bookmarkManager.GetChildFolders(folder))
+            {
+                var folderItem = new ToolStripMenuItem(BookmarkManager.NameOf(child));
+                FillFolderItems(folderItem.DropDownItems, child);
+                items.Add(folderItem);
+            }
+
+            var found = _bookmarkManager.GetBookmarks(folder, false);
+            if (found.Count > 0 && items.Count > 0) items.Add(new ToolStripSeparator());
+
+            foreach (var bookmark in found)
+            {
+                string url = bookmark.Url;
+                var item = new ToolStripMenuItem(MenuTitle(bookmark.Title, url));
+                item.ToolTipText = url;
+                item.Click += delegate { OpenBookmark(url, false); };
+                items.Add(item);
+            }
+
+            if (items.Count == 0)
+            {
+                var empty = new ToolStripMenuItem("No bookmarks here");
+                empty.Enabled = false;
+                items.Add(empty);
+            }
+        }
+
+        /// <summary>The dropdown under a folder on the bookmarks bar.</summary>
+        private void ShowBookmarkFolderMenu(string folder, int cssX, int cssY)
+        {
+            var menu = NewMenu();
+            FillFolderItems(menu.Items, BookmarkManager.Normalize(folder));
+            ShowChromeMenu(menu, cssX, cssY);
+        }
+
+        /// <summary>Middle-clicking a folder opens everything inside it.</summary>
+        private void OpenFolderInTabs(string folder)
+        {
+            var found = _bookmarkManager.GetBookmarks(BookmarkManager.Normalize(folder), false);
+            if (found.Count == 0) return;
+
+            bool first = true;
+            foreach (var bookmark in found)
+            {
+                if (first)
+                {
+                    OpenBookmark(bookmark.Url, false);
+                    first = false;
+                }
+                else
+                {
+                    AddNewTab(bookmark.Url);
+                }
+            }
+        }
+
+        /// <summary>The items that did not fit on the bar, behind the chevron.</summary>
+        private void ShowBookmarkOverflowMenu(int index, int cssX, int cssY)
+        {
+            var entries = BarEntries();
+            if (index < 0 || index >= entries.Count) return;
+
+            var menu = NewMenu();
+            for (int i = index; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+
+                if (entry.IsFolder)
+                {
+                    var folderItem = new ToolStripMenuItem(entry.Title);
+                    FillFolderItems(folderItem.DropDownItems, entry.Path);
+                    menu.Items.Add(folderItem);
+                }
+                else
+                {
+                    string url = entry.Url;
+                    var item = new ToolStripMenuItem(MenuTitle(entry.Title, url));
+                    item.ToolTipText = url;
+                    item.Click += delegate { OpenBookmark(url, false); };
+                    menu.Items.Add(item);
+                }
+            }
+
+            ShowChromeMenu(menu, cssX, cssY);
+        }
+
+        /// <summary>Right-clicking an item on the bar.</summary>
+        private void ShowBookmarkBarItemMenu(string json)
+        {
+            string kind = ExtractJsonField(json, "kind");
+            int cssX = ExtractJsonInt(json, "x");
+            int cssY = ExtractJsonInt(json, "y");
+
+            if (kind == "folder")
+            {
+                ShowBookmarkFolderContextMenu(ExtractJsonField(json, "path"), cssX, cssY);
+                return;
+            }
+
+            string url = ExtractJsonField(json, "url");
+            if (string.IsNullOrEmpty(url)) return;
+
+            var bookmark = _bookmarkManager.Find(url);
+            string title = bookmark != null ? bookmark.Title : ExtractJsonField(json, "title");
+
+            var menu = NewMenu();
+
+            var open = new ToolStripMenuItem("Open in This Tab", null, delegate { OpenBookmark(url, false); });
+            menu.Items.Add(open);
+            menu.Items.Add(new ToolStripMenuItem("Open in New Tab", null, delegate { OpenBookmark(url, true); }));
+            menu.Items.Add(new ToolStripSeparator());
+
+            var moveTo = new ToolStripMenuItem("Move to Folder");
+            FillMoveTargets(moveTo.DropDownItems, null, delegate (string destination)
+            {
+                _bookmarkManager.MoveBookmark(url, destination);
+            });
+            menu.Items.Add(moveTo);
+
+            menu.Items.Add(new ToolStripMenuItem("Rename\u2026", null, delegate { RenameBookmark(url, title); }));
+
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Copy Address", null, delegate { CopyToClipboard(url); }));
+
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Delete Bookmark", null, delegate
+            {
+                _bookmarkManager.RemoveBookmark(url);
+            }));
+
+            ShowChromeMenu(menu, cssX, cssY);
+        }
+
+        /// <summary>Right-clicking a folder on the bar.</summary>
+        private void ShowBookmarkFolderContextMenu(string folder, int cssX, int cssY)
+        {
+            string path = BookmarkManager.Normalize(folder);
+            var menu = NewMenu();
+
+            menu.Items.Add(new ToolStripMenuItem("Open in New Tabs", null, delegate { OpenFolderInTabs(path); }));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("New Folder Inside\u2026", null, delegate
+            {
+                CreateFolderIn(path);
+            }));
+            menu.Items.Add(new ToolStripMenuItem("Rename\u2026", null, delegate
+            {
+                using (var prompt = new TextPromptForm("Rename Folder", "Name:", BookmarkManager.NameOf(path), "Rename"))
+                {
+                    if (prompt.ShowDialog(this) != DialogResult.OK) return;
+                    _bookmarkManager.RenameFolder(path, prompt.Value);
+                }
+            }));
+
+            if (path.Length > 0)
+            {
+                var moveTo = new ToolStripMenuItem("Move to Folder");
+                FillMoveTargets(moveTo.DropDownItems, path, delegate (string destination)
+                {
+                    _bookmarkManager.MoveFolder(path, destination);
+                });
+                menu.Items.Add(moveTo);
+            }
+
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Delete Folder", null, delegate { DeleteFolderWithConfirm(path); }));
+
+            ShowChromeMenu(menu, cssX, cssY);
+        }
+
+        /// <summary>Right-clicking the empty part of the bar.</summary>
+        private void ShowBookmarksBarMenu(int cssX, int cssY)
+        {
+            var menu = NewMenu();
+
+            // No check margin is drawn, so the label carries the state.
+            var show = new ToolStripMenuItem(
+                Settings.Current.ShowBookmarksBar ? "Hide Bookmarks Bar" : "Show Bookmarks Bar", null,
+                delegate { Settings.Current.Set("bookmarksBar", !Settings.Current.ShowBookmarksBar); });
+            menu.Items.Add(show);
+
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Bookmark This Page\u2026", null, delegate { AddBookmarkDialog(); }));
+            menu.Items.Add(new ToolStripMenuItem("Manage Bookmarks\u2026", null, delegate { ShowBookmarks(); }));
+
+            ShowChromeMenu(menu, cssX, cssY);
+        }
+
+        private void RenameBookmark(string url, string currentTitle)
+        {
+            using (var prompt = new TextPromptForm("Rename Bookmark", "Name:", currentTitle, "Rename"))
+            {
+                if (prompt.ShowDialog(this) != DialogResult.OK) return;
+                _bookmarkManager.RenameBookmark(url, prompt.Value);
+            }
+        }
+
+        private void CreateFolderIn(string parent)
+        {
+            string suggested = _bookmarkManager.UniqueChildName(parent, "New Folder");
+            using (var prompt = new TextPromptForm("New Folder", "Name for the new folder:", suggested, "Create"))
+            {
+                if (prompt.ShowDialog(this) != DialogResult.OK) return;
+                _bookmarkManager.CreateFolder(parent, _bookmarkManager.UniqueChildName(parent, prompt.Value));
+            }
+        }
+
+        private void DeleteFolderWithConfirm(string folder)
+        {
+            string path = BookmarkManager.Normalize(folder);
+            int count = _bookmarkManager.CountBookmarks(path, true);
+
+            string name = path.Length == 0 ? BookmarkManager.RootFolder : BookmarkManager.NameOf(path);
+            string question = count == 0
+                ? "Delete the folder \"" + name + "\"?"
+                : "Delete the folder \"" + name + "\" and the " + count +
+                  (count == 1 ? " bookmark inside it?" : " bookmarks inside it?");
+
+            if (MessageBox.Show(this, question, "Delete Folder",
+                    MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+            {
+                return;
+            }
+
+            _bookmarkManager.DeleteFolder(path);
+        }
+
+        /// <summary>
+        /// Fills a "move to" submenu with every folder that could hold the item,
+        /// plus a way to make a new one on the spot.
+        /// </summary>
+        private void FillMoveTargets(ToolStripItemCollection items, string excludeFolder, Action<string> move)
+        {
+            var root = new ToolStripMenuItem(BookmarkManager.RootFolder);
+            root.Click += delegate { move(string.Empty); };
+            items.Add(root);
+
+            foreach (string folder in _bookmarkManager.GetFolders())
+            {
+                if (excludeFolder != null && BookmarkManager.IsSameOrInside(folder, excludeFolder)) continue;
+
+                var choice = new ToolStripMenuItem(Indent(folder));
+                string destination = folder;
+                choice.Click += delegate { move(destination); };
+                items.Add(choice);
+            }
+
+            items.Add(new ToolStripSeparator());
+
+            var create = new ToolStripMenuItem("New Folder\u2026");
+            create.Click += delegate
+            {
+                string suggested = _bookmarkManager.UniqueChildName(string.Empty, "New Folder");
+                using (var prompt = new TextPromptForm("New Folder", "Name for the new folder:", suggested, "Create"))
+                {
+                    if (prompt.ShowDialog(this) != DialogResult.OK) return;
+
+                    string created = _bookmarkManager.CreateFolder(string.Empty,
+                        _bookmarkManager.UniqueChildName(string.Empty, prompt.Value));
+                    if (string.IsNullOrEmpty(created)) return;
+                    move(created);
+                }
+            };
+            items.Add(create);
+        }
+
+        private static string Indent(string folder)
+        {
+            int depth = 0;
+            foreach (char c in folder)
+            {
+                if (c == '/') depth++;
+            }
+            return new string('\u00a0', depth * 3) + BookmarkManager.NameOf(folder);
+        }
+
+        private void CopyToClipboard(string text)
+        {
+            try
+            {
+                Clipboard.SetText(text ?? string.Empty);
+            }
+            catch
+            {
+                // The clipboard is occasionally locked by another process.
+            }
         }
 
         private void SyncShields()
@@ -630,7 +1166,7 @@ namespace SimpleBrowser
         {
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
             var shield = new BraveShieldsForm(url);
-            shield.Location = new Point(Math.Max(Dpi.Px(10), Right - Dpi.Px(356)), Top + Dpi.Px(ChromeHtml.ChromeHeight + 6));
+            shield.Location = new Point(Math.Max(Dpi.Px(10), Right - Dpi.Px(356)), Top + ChromePx() + Dpi.Px(6));
             shield.Show(this);
         }
 
@@ -753,6 +1289,7 @@ namespace SimpleBrowser
                     case 0x48: action = "history"; break;                          // Ctrl+H
                     case 0x55: action = "source"; break;                           // Ctrl+U
                     case 0x4F: if (shift) action = "bookmarks"; break;             // Ctrl+Shift+O
+                    case 0x42: if (shift) action = "bookmarks_bar"; break;         // Ctrl+Shift+B
                     case 0xBC: action = "settings"; break;                         // Ctrl+,
                     case 0x09: action = shift ? "prev_tab" : "next_tab"; break;    // Ctrl+Tab
                 }
@@ -784,6 +1321,7 @@ namespace SimpleBrowser
                 case "bookmark": ToggleBookmarkCurrent(); break;
                 case "history": ShowHistory(); break;
                 case "bookmarks": ShowBookmarks(); break;
+                case "bookmarks_bar": Settings.Current.Set("bookmarksBar", !Settings.Current.ShowBookmarksBar); break;
                 case "source": ShowPageSource(); break;
                 case "settings": OpenSettings(); break;
                 case "back": if (ActiveTab != null) ActiveTab.GoBack(); break;
@@ -1138,7 +1676,7 @@ namespace SimpleBrowser
             var newTabItem = new ToolStripMenuItem("New Tab", null, delegate { AddNewTab(); });
             newTabItem.ShortcutKeyDisplayString = "Ctrl+T";
 
-            var bookmarksItem = new ToolStripMenuItem("Bookmark This Page", null, delegate { ToggleBookmarkCurrent(); });
+            var bookmarksItem = new ToolStripMenuItem("Bookmark This Page\u2026", null, delegate { ToggleBookmarkCurrent(); });
             bookmarksItem.ShortcutKeyDisplayString = "Ctrl+D";
 
             var historyItem = new ToolStripMenuItem("History", null, delegate { ShowHistory(); });
@@ -1146,6 +1684,12 @@ namespace SimpleBrowser
 
             var allBookmarksItem = new ToolStripMenuItem("Show All Bookmarks", null, delegate { ShowBookmarks(); });
             allBookmarksItem.ShortcutKeyDisplayString = "Ctrl+Shift+O";
+
+            var bookmarksBarItem = new ToolStripMenuItem("Show Bookmarks Bar", null, delegate
+            {
+                Settings.Current.Set("bookmarksBar", !Settings.Current.ShowBookmarksBar);
+            });
+            bookmarksBarItem.ShortcutKeyDisplayString = "Ctrl+Shift+B";
 
             var sourceItem = new ToolStripMenuItem("View Page Source", null, delegate { ShowPageSource(); });
             sourceItem.ShortcutKeyDisplayString = "Ctrl+U";
@@ -1173,6 +1717,10 @@ namespace SimpleBrowser
                 lightItem.Checked = Theme.Preference == "light";
                 darkItem.Checked = Theme.Preference == "dark";
                 systemItem.Checked = Theme.Preference == "system";
+
+                // This menu has no check margin, so the label carries the state.
+                bool bar = Settings.Current.ShowBookmarksBar;
+                bookmarksBarItem.Text = bar ? "Hide Bookmarks Bar" : "Show Bookmarks Bar";
             };
 
             var aboutItem = new ToolStripMenuItem("About Aura", null, delegate { ShowAbout(); });
@@ -1184,6 +1732,7 @@ namespace SimpleBrowser
             menu.Items.Add(newTabItem);
             menu.Items.Add(bookmarksItem);
             menu.Items.Add(allBookmarksItem);
+            menu.Items.Add(bookmarksBarItem);
             menu.Items.Add(historyItem);
             menu.Items.Add(sourceItem);
             menu.Items.Add(new ToolStripSeparator());
@@ -1204,7 +1753,7 @@ namespace SimpleBrowser
 
             _openMenu = menu;
             InstallMenuMouseHook();
-            menu.Show(PointToScreen(new Point(Width - Dpi.Px(208), Dpi.Px(ChromeHtml.ChromeHeight + 4))));
+            menu.Show(PointToScreen(new Point(Width - Dpi.Px(208), ChromePx() + Dpi.Px(4))));
         }
 
         /// <summary>
@@ -1273,7 +1822,7 @@ namespace SimpleBrowser
 
                     if (_chromeWebView != null)
                     {
-                        _chromeWebView.Height = Dpi.Px(ChromeHtml.ChromeHeight);
+                        _chromeWebView.Height = ChromePx();
                     }
                     LayoutTabs();
                 }
@@ -1336,6 +1885,13 @@ namespace SimpleBrowser
                 if (int.TryParse(match.Groups[1].Value, out val)) return val;
             }
             return -1;
+        }
+
+        private static bool ExtractJsonBool(string json, string field)
+        {
+            string pattern = "\"" + field + "\"\\s*:\\s*(true|false)";
+            var match = System.Text.RegularExpressions.Regex.Match(json, pattern);
+            return match.Success && match.Groups[1].Value == "true";
         }
 
         /// <summary>

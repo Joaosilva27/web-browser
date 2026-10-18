@@ -13,6 +13,12 @@ namespace SimpleBrowser
         /// <summary>Height of the toolbar row.</summary>
         public const int ToolbarHeight = 44;
 
+        /// <summary>Height of the bookmarks bar, which sits under the toolbar.</summary>
+        public const int BookmarksBarHeight = 30;
+
+        /// <summary>Total chrome height with the bookmarks bar showing.</summary>
+        public const int ChromeHeightWithBookmarks = ChromeHeight + BookmarksBarHeight;
+
         public static string GetHtml(bool dark)
         {
             string html = @"<!DOCTYPE html>
@@ -482,6 +488,115 @@ namespace SimpleBrowser
         font-variant-numeric: tabular-nums;
     }
 
+    /* ── Bookmarks bar ────────────────────────────────────────────────── */
+
+    .bbar {
+        height: 30px;
+        flex: 0 0 30px;
+        display: none;
+        align-items: center;
+        gap: 2px;
+        padding: 0 6px 0 8px;
+        border-top: 1px solid var(--hairline);
+        -webkit-app-region: drag;
+        overflow: hidden;
+    }
+    .bbar.show { display: flex; }
+
+    .bbar-items {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        overflow: hidden;
+    }
+
+    .bitem {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        flex: none;
+        max-width: 170px;
+        padding: 0 7px;
+        border-radius: 5px;
+        color: var(--text2);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: -0.005em;
+        white-space: nowrap;
+        overflow: hidden;
+        transition: background 0.12s ease, color 0.12s ease;
+        -webkit-app-region: no-drag;
+    }
+    .bitem:hover { background: var(--btn-hover); color: var(--text); }
+    .bitem:active { background: var(--field-hover); }
+
+    .bitem .bname {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .bfav {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        border-radius: 3px;
+        display: grid;
+        place-items: center;
+        font-size: 8.5px;
+        font-weight: 700;
+        color: #fff;
+        box-shadow: var(--tile-shadow);
+    }
+    .bfav img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        border-radius: 3px;
+    }
+    .bfav.plain { background: transparent; box-shadow: none; }
+    .bfav.folder {
+        background: transparent;
+        box-shadow: none;
+    }
+    .bfav.folder svg {
+        width: 14px;
+        height: 14px;
+        fill: none;
+        stroke: var(--text3);
+        stroke-width: 1.65;
+        stroke-linejoin: round;
+    }
+    .bitem:hover .bfav.folder svg { stroke: var(--text); }
+
+    .bbar-more {
+        width: 20px;
+        height: 22px;
+        flex: none;
+        border-radius: 5px;
+        display: none;
+        place-items: center;
+        color: var(--text2);
+        -webkit-app-region: no-drag;
+    }
+    .bbar-more.on { display: grid; }
+    .bbar-more:hover { background: var(--btn-hover); color: var(--text); }
+    .bbar-more svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
     /* ── Loading line ─────────────────────────────────────────────────── */
 
     .progress {
@@ -594,6 +709,15 @@ namespace SimpleBrowser
             <button class='iconbtn' id='btn-menu' title='Menu'>
                 <svg class='dots' viewBox='0 0 24 24'><circle cx='5.4' cy='12' r='1.7'/><circle cx='12' cy='12' r='1.7'/><circle cx='18.6' cy='12' r='1.7'/></svg>
             </button>
+        </div>
+    </div>
+
+    <div class='bbar' id='bbar'>
+        <div class='bbar-items' id='bbar-items'></div>
+        <!-- No title here: Chromium's popup tooltip would sit over the first
+             item of the menu this button opens. -->
+        <div class='bbar-more' id='bbar-more'>
+            <svg viewBox='0 0 24 24'><path d='M9.5 6l6 6-6 6'/></svg>
         </div>
     </div>
 
@@ -743,6 +867,175 @@ namespace SimpleBrowser
         post('window_max');
     });
 
+    // ── Bookmarks bar ────────────────────────────────────────────────────
+    // The host decides whether the bar is on and what it holds. Folders open a
+    // native menu owned by the host, which is the only way to escape this
+    // WebView's own rectangle.
+
+    var bbar = document.getElementById('bbar');
+    var bbarItems = document.getElementById('bbar-items');
+    var bbarMore = document.getElementById('bbar-more');
+    var barOverflowFrom = -1;
+
+    function folderGlyph() {
+        var ns = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        var path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', 'M3.5 7.6c0-.9.7-1.6 1.6-1.6h3.6l1.7 2h8.5c.9 0 1.6.7 1.6 1.6v7.2c0 .9-.7 1.6-1.6 1.6H5.1c-.9 0-1.6-.7-1.6-1.6z');
+        svg.appendChild(path);
+        return svg;
+    }
+
+    function barIcon(item) {
+        var fav = document.createElement('div');
+        fav.className = 'bfav';
+
+        if (item.kind === 'folder') {
+            fav.classList.add('folder');
+            fav.appendChild(folderGlyph());
+            return fav;
+        }
+
+        if (item.icon) {
+            var img = document.createElement('img');
+            img.src = item.icon;
+            img.alt = '';
+            fav.classList.add('plain');
+            fav.appendChild(img);
+            return fav;
+        }
+
+        var label = hostOf(item.url) || item.title || 'A';
+        fav.style.background = colorFor(label);
+        fav.textContent = (label.charAt(0) || 'A').toUpperCase();
+        return fav;
+    }
+
+    function barAnchor(el) {
+        var r = el.getBoundingClientRect();
+        return { x: Math.round(r.left), y: Math.round(r.bottom) };
+    }
+
+    function buildBarItem(item) {
+        var el = document.createElement('div');
+        el.className = 'bitem';
+        el.dataset.tip = item.kind === 'folder'
+            ? (item.title || 'Folder') + ' \u2014 folder'
+            : (item.title || item.url || '');
+
+        el.appendChild(barIcon(item));
+
+        var name = document.createElement('span');
+        name.className = 'bname';
+        name.textContent = item.title || item.url || '';
+        el.appendChild(name);
+
+        el.addEventListener('click', function (e) {
+            var at = barAnchor(el);
+            if (item.kind === 'folder') {
+                post('bm_folder', { path: item.path, x: at.x, y: at.y });
+            } else {
+                post('bm_open', { url: item.url, newTab: e.metaKey || e.ctrlKey, x: at.x, y: at.y });
+            }
+        });
+
+        el.addEventListener('auxclick', function (e) {
+            if (e.button !== 1) { return; }
+            e.preventDefault();
+            if (item.kind === 'folder') {
+                post('bm_folder_all', { path: item.path });
+            } else {
+                post('bm_open', { url: item.url, newTab: true, x: 0, y: 0 });
+            }
+        });
+
+        el.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var at = barAnchor(el);
+            post('bm_menu', {
+                kind: item.kind,
+                url: item.url,
+                path: item.path,
+                title: item.title,
+                x: at.x,
+                y: at.y
+            });
+        });
+
+        return el;
+    }
+
+    // Keeps as many items on the bar as fit, and moves the rest behind the
+    // chevron. Runs again on every resize.
+    function layoutBar() {
+        var nodes = bbarItems.children;
+        var i;
+
+        for (i = 0; i < nodes.length; i++) { nodes[i].style.display = ''; }
+        bbarMore.classList.remove('on');
+        barOverflowFrom = -1;
+
+        if (nodes.length === 0) { return; }
+
+        var limit = bbarItems.clientWidth;
+        for (i = 0; i < nodes.length; i++) {
+            if (nodes[i].offsetLeft + nodes[i].offsetWidth > limit + 1) {
+                barOverflowFrom = i;
+                break;
+            }
+        }
+        if (barOverflowFrom < 0) {
+            markTruncated(nodes);
+            return;
+        }
+
+        bbarMore.classList.add('on');
+        limit = bbarItems.clientWidth;
+
+        for (i = barOverflowFrom; i < nodes.length; i++) { nodes[i].style.display = 'none'; }
+
+        // The chevron itself took room, so check the items that looked fine.
+        for (i = 0; i < barOverflowFrom; i++) {
+            if (nodes[i].offsetLeft + nodes[i].offsetWidth > limit + 1) {
+                barOverflowFrom = i;
+                for (var j = i; j < nodes.length; j++) { nodes[j].style.display = 'none'; }
+                break;
+            }
+        }
+
+        markTruncated(nodes);
+    }
+
+    // Chromium draws its own popup tooltip, which would sit over a menu that
+    // opens directly under the item. Only ask for one when the label is
+    // actually cut off.
+    function markTruncated(nodes) {
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            if (el.style.display === 'none') { el.removeAttribute('title'); continue; }
+
+            var name = el.querySelector('.bname');
+            if (name && name.scrollWidth > name.clientWidth + 1) { el.title = el.dataset.tip; }
+            else { el.removeAttribute('title'); }
+        }
+    }
+
+    bbarMore.addEventListener('click', function () {
+        if (barOverflowFrom < 0) { return; }
+        var at = barAnchor(bbarMore);
+        post('bm_more', { index: barOverflowFrom, x: at.x, y: at.y });
+    });
+
+    bbar.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        var r = bbar.getBoundingClientRect();
+        post('bm_bar_menu', { x: Math.round(e.clientX), y: Math.round(r.bottom) });
+    });
+
+    window.addEventListener('resize', function () { layoutBar(); });
+
     window.BraveAPI = {
         renderTabs: function (tabs, activeIdx) {
             var container = document.getElementById('tabs');
@@ -825,6 +1118,19 @@ namespace SimpleBrowser
             var star = document.getElementById('btn-star');
             star.classList.toggle('on', !!yes);
             star.title = yes ? 'Remove bookmark (Ctrl+D)' : 'Bookmark this page (Ctrl+D)';
+        },
+
+        renderBookmarks: function (show, items) {
+            bbar.classList.toggle('show', !!show);
+            bbarItems.innerHTML = '';
+            barOverflowFrom = -1;
+
+            var list = items || [];
+            for (var i = 0; i < list.length; i++) {
+                bbarItems.appendChild(buildBarItem(list[i]));
+            }
+
+            layoutBar();
         },
 
         focusUrl: function () {

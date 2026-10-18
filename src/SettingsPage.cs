@@ -49,6 +49,7 @@ namespace SimpleBrowser
                 "autofill", Settings.Current.Autofill,
                 "showClock", Settings.Current.ShowClock,
                 "showTiles", Settings.Current.ShowTiles,
+                "bookmarksBar", Settings.Current.ShowBookmarksBar,
                 "zoom", Settings.Current.Zoom,
                 "ruleCount", AdBlocker.RuleCount,
                 "blockedCount", AdBlocker.BlockedCount,
@@ -373,6 +374,16 @@ namespace SimpleBrowser
                 </div>
                 <label class='switch'>
                     <input type='checkbox' data-key='showTiles' />
+                    <span class='track'></span>
+                </label>
+            </div>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Show the bookmarks bar</div>
+                    <div class='hint'>The row of saved pages under the toolbar. Ctrl+Shift+B toggles it too.</div>
+                </div>
+                <label class='switch'>
+                    <input type='checkbox' data-key='bookmarksBar' />
                     <span class='track'></span>
                 </label>
             </div>

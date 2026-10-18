@@ -131,6 +131,12 @@ namespace SimpleBrowser
             get { return Json.GetBool(_values, "showTiles", true); }
         }
 
+        /// <summary>The row of saved bookmarks under the toolbar.</summary>
+        public bool ShowBookmarksBar
+        {
+            get { return Json.GetBool(_values, "bookmarksBar", true); }
+        }
+
         /// <summary>Page zoom as a percentage: 100 is one hundred percent.</summary>
         public int Zoom
         {
@@ -186,6 +192,9 @@ namespace SimpleBrowser
                     break;
                 case "showtiles":
                     _values["showTiles"] = AsBool(value, ShowTiles);
+                    break;
+                case "bookmarksbar":
+                    _values["bookmarksBar"] = AsBool(value, ShowBookmarksBar);
                     break;
                 case "zoom":
                     {
@@ -293,6 +302,7 @@ namespace SimpleBrowser
             _values["autofill"] = true;
             _values["showClock"] = true;
             _values["showTiles"] = true;
+            _values["bookmarksBar"] = true;
             _values["zoom"] = 100;
         }
 
