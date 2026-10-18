@@ -15,6 +15,8 @@ namespace SimpleBrowser
         // Win32 constants for frameless resizing and dragging
         private const int WM_NCHITTEST = 0x84;
         private const int WM_DPICHANGED = 0x02E0;
+        private const int WM_GETMINMAXINFO = 0x24;
+        private const int MONITOR_DEFAULTTONEAREST = 2;
         private const int HTCLIENT = 1;
         private const int HTLEFT = 10;
         private const int HTRIGHT = 11;
@@ -65,6 +67,12 @@ namespace SimpleBrowser
         [DllImport("user32.dll")]
         private static extern IntPtr CallNextHookEx(IntPtr hook, int nCode, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr window, int flags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
         private WebView2 _chromeWebView;
         private Panel _contentPanel;
         private TabControl _tabControl;
@@ -72,6 +80,8 @@ namespace SimpleBrowser
         private readonly BookmarkManager _bookmarkManager;
         private readonly HistoryManager _historyManager;
         private bool _chromeReady;
+        private bool _windowIsFullScreen;
+        private FormWindowState _windowStateBeforeFullScreen = FormWindowState.Normal;
         private Timer _shieldsTimer;
 
         private ContextMenuStrip _openMenu;
@@ -128,6 +138,7 @@ namespace SimpleBrowser
             _tabControl.SelectedIndexChanged += delegate
             {
                 SyncAllToChrome();
+                SyncPageFullScreen();
             };
 
             _contentPanel.Controls.Add(_tabControl);
@@ -365,6 +376,7 @@ namespace SimpleBrowser
             tab.NewWindowRequested += OnTabNewWindowRequested;
             tab.WindowCloseRequested += OnTabWindowCloseRequested;
             tab.SettingsMessage += OnTabSettingsMessage;
+            tab.FullScreenChanged += OnTabFullScreenChanged;
 
             _tabControl.TabPages.Add(tab);
             _tabControl.SelectedTab = tab;
@@ -386,6 +398,7 @@ namespace SimpleBrowser
                 ActiveTab.LoadHomePage();
             }
             SyncAllToChrome();
+            SyncPageFullScreen();
         }
 
         private void ToggleBookmarkCurrent()
@@ -580,6 +593,37 @@ namespace SimpleBrowser
         {
             int index = _tabControl.TabPages.IndexOf(tab);
             if (index >= 0) CloseTabAt(index);
+        }
+
+        private void OnTabFullScreenChanged(BrowserTab tab, bool fullScreen)
+        {
+            SyncPageFullScreen();
+        }
+
+        /// <summary>
+        /// Matches the window to the fullscreen state of the active tab. A page
+        /// that asks for its own fullscreen gets the whole window and the working
+        /// area — never the whole monitor, so the taskbar stays visible.
+        /// </summary>
+        private void SyncPageFullScreen()
+        {
+            var tab = ActiveTab;
+            bool fullScreen = tab != null && tab.IsFullScreen;
+
+            if (fullScreen == _windowIsFullScreen) return;
+            _windowIsFullScreen = fullScreen;
+
+            if (fullScreen)
+            {
+                _windowStateBeforeFullScreen = WindowState;
+                WindowState = FormWindowState.Maximized;
+                _chromeWebView.Visible = false;
+            }
+            else
+            {
+                _chromeWebView.Visible = true;
+                WindowState = _windowStateBeforeFullScreen;
+            }
         }
 
         private void ShowBraveShields()
@@ -1163,9 +1207,50 @@ namespace SimpleBrowser
             menu.Show(PointToScreen(new Point(Width - Dpi.Px(208), Dpi.Px(ChromeHtml.ChromeHeight + 4))));
         }
 
+        /// <summary>
+        /// Windows hands a frameless window the whole monitor when it maximizes,
+        /// which hides the taskbar. Rewriting MAXSIZE and MAXPOSITION to the
+        /// working area of the nearest monitor keeps the taskbar where it was.
+        /// </summary>
+        private void ClampMaximizedBounds(IntPtr minMaxInfoPointer)
+        {
+            try
+            {
+                IntPtr monitor = MonitorFromWindow(Handle, MONITOR_DEFAULTTONEAREST);
+                if (monitor == IntPtr.Zero) return;
+
+                var monitorInfo = new MonitorInfo();
+                monitorInfo.Size = Marshal.SizeOf(typeof(MonitorInfo));
+                if (!GetMonitorInfo(monitor, ref monitorInfo)) return;
+
+                var info = (MinMaxInfo)Marshal.PtrToStructure(minMaxInfoPointer, typeof(MinMaxInfo));
+                info.MaxPosition.X = monitorInfo.Work.Left;
+                info.MaxPosition.Y = monitorInfo.Work.Top;
+                info.MaxSize.X = monitorInfo.Work.Right - monitorInfo.Work.Left;
+                info.MaxSize.Y = monitorInfo.Work.Bottom - monitorInfo.Work.Top;
+                Marshal.StructureToPtr(info, minMaxInfoPointer, false);
+            }
+            catch
+            {
+                // Keeping the default maximize is better than failing to open.
+            }
+        }
+
         // Native Resizing
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_GETMINMAXINFO)
+            {
+                base.WndProc(ref m);
+
+                // A window with no title bar is maximized to the whole monitor,
+                // which swallows the taskbar. Clamp it to the working area of
+                // the monitor the window is on instead, so the taskbar and any
+                // docked toolbars stay visible.
+                ClampMaximizedBounds(m.LParam);
+                return;
+            }
+
             if (m.Msg == WM_DPICHANGED)
             {
                 base.WndProc(ref m);
@@ -1289,6 +1374,26 @@ namespace SimpleBrowser
             public int Top;
             public int Right;
             public int Bottom;
+        }
+
+        /// <summary>The WM_GETMINMAXINFO payload Windows fills in before maximizing.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MinMaxInfo
+        {
+            public NativePoint Reserved;
+            public NativePoint MaxSize;
+            public NativePoint MaxPosition;
+            public NativePoint MinTrackSize;
+            public NativePoint MaxTrackSize;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MonitorInfo
+        {
+            public int Size;
+            public NativeRect Monitor;
+            public NativeRect Work;
+            public int Flags;
         }
     }
 

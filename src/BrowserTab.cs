@@ -30,6 +30,9 @@ namespace SimpleBrowser
         /// <summary>Raised by the about:settings page with a JSON message.</summary>
         public event Action<BrowserTab, string> SettingsMessage;
 
+        /// <summary>Raised when the page enters or leaves its own fullscreen (video, slides).</summary>
+        public event Action<BrowserTab, bool> FullScreenChanged;
+
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
         public string DisplayTitle { get; private set; }
@@ -92,6 +95,7 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.FaviconChanged += OnFaviconChanged;
                 _webView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
                 _webView.CoreWebView2.WindowCloseRequested += OnWindowCloseRequested;
+                _webView.CoreWebView2.ContainsFullScreenElementChanged += OnContainsFullScreenElementChanged;
 
                 if (!string.IsNullOrEmpty(_pendingUrl))
                 {
@@ -485,6 +489,34 @@ namespace SimpleBrowser
         private void OnWindowCloseRequested(object sender, object e)
         {
             if (WindowCloseRequested != null) WindowCloseRequested(this);
+        }
+
+        /// <summary>
+        /// A page (usually a video) asked for its own fullscreen. Aura answers by
+        /// filling the working area instead of the whole monitor, so the taskbar
+        /// stays where it is.
+        /// </summary>
+        private void OnContainsFullScreenElementChanged(object sender, object e)
+        {
+            if (FullScreenChanged != null) FullScreenChanged(this, IsFullScreen);
+        }
+
+        /// <summary>True while the page inside this tab holds the fullscreen.</summary>
+        public bool IsFullScreen
+        {
+            get
+            {
+                if (!_isInitialized || _webView.CoreWebView2 == null) return false;
+
+                try
+                {
+                    return _webView.CoreWebView2.ContainsFullScreenElement;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
         }
 
         private async void OnFaviconChanged(object sender, object e)
