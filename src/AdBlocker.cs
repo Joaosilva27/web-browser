@@ -1231,21 +1231,9 @@ namespace SimpleBrowser
         (document.head || document.documentElement).appendChild(style);
     }
 
-    function removeMatching(root) {
-        if (!root || !root.querySelectorAll) { return; }
-        var nodes;
-        try {
-            nodes = root.querySelectorAll(CSS_SELECTORS.join(','));
-        } catch (e) {
-            return;
-        }
-        for (var i = 0; i < nodes.length; i++) {
-            var el = nodes[i];
-            if (el && el.parentNode && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
-                el.parentNode.removeChild(el);
-            }
-        }
-    }
+    // Elements are hidden with CSS, not removed. Removing nodes that a site's own scripts
+    // still reference can break the page, and the injected stylesheet already applies to
+    // elements added later. Only ad iframes are removed, since they keep fetching while hidden.
 
     // ---- Popup / iframe ad URLs -----------------------------------------
     // Only these known ad-network fragments are treated as ads. The previous
@@ -1290,38 +1278,123 @@ namespace SimpleBrowser
     }
 
     // ---- YouTube --------------------------------------------------------
-    function handleYouTube() {
-        if (location.hostname.indexOf('youtube.com') === -1 &&
-            location.hostname.indexOf('youtube-nocookie.com') === -1) {
-            return;
+    // YouTube serves ad video from the same googlevideo.com hosts as real video, so
+    // domain blocking cannot stop in-stream ads. We attack it in two places:
+    //   (a) strip ad metadata from the player response before the player reads it,
+    //   (b) detect any ad that still starts, click skip, and seek past it.
+    // A timer is required because ad start/end is a CSS class change, which the
+    // childList MutationObserver below cannot observe.
+
+    var ytMuteSaved = null;
+
+    function isYouTube() {
+        var h = location.hostname;
+        return h.indexOf('youtube.com') !== -1 || h.indexOf('youtube-nocookie.com') !== -1;
+    }
+
+    function installPlayerResponseTrap() {
+        if (!isYouTube() || window.__auraYtTrap) { return; }
+        window.__auraYtTrap = true;
+
+        var stored = null;
+
+        function clean(response) {
+            if (!response) { return response; }
+            try {
+                delete response.adPlacements;
+                delete response.playerAds;
+                if (response.playerConfig) {
+                    delete response.playerConfig.adConfig;
+                }
+            } catch (e) {}
+            return response;
         }
 
         try {
-            var skip = document.querySelector(
-                '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button');
-            if (skip) { skip.click(); }
-
-            var adShowing = document.querySelector('.ad-showing, .ad-interrupting');
-            var video = document.querySelector('video');
-            if (adShowing && video) {
-                try {
-                    if (!isNaN(video.duration) && isFinite(video.duration)) {
-                        video.currentTime = video.duration;
-                    } else {
-                        video.currentTime = 1e5;
-                    }
-                    video.muted = true;
-                } catch (e) {}
-                if (skip) { skip.click(); }
-            }
+            Object.defineProperty(window, 'ytInitialPlayerResponse', {
+                configurable: true,
+                get: function () { return stored; },
+                set: function (value) { stored = clean(value); }
+            });
         } catch (e) {}
+    }
+
+    function killYouTubeAd() {
+        if (!isYouTube()) { return; }
+
+        var player = document.getElementById('movie_player');
+        if (!player) { return; }
+
+        var adShowing = player.classList.contains('ad-showing') ||
+                        player.classList.contains('ad-interrupting') ||
+                        !!document.querySelector('.ytp-ad-player-overlay-layout');
+
+        var video = document.querySelector('video.html5-main-video') ||
+                    document.querySelector('#movie_player video');
+
+        if (!adShowing) {
+            if (ytMuteSaved !== null && video) {
+                try { video.muted = ytMuteSaved; } catch (e) {}
+                ytMuteSaved = null;
+            }
+            return;
+        }
+
+        // Click every skip affordance YouTube ships.
+        var skipSelectors = [
+            '.ytp-ad-skip-button',
+            '.ytp-ad-skip-button-modern',
+            '.ytp-skip-ad-button',
+            '.ytp-ad-skip-button-slot button',
+            '.ytp-ad-skip-button-container button'
+        ];
+        for (var i = 0; i < skipSelectors.length; i++) {
+            var btn = document.querySelector(skipSelectors[i]);
+            if (btn) { try { btn.click(); } catch (e) {} }
+        }
+
+        if (video) {
+            try {
+                if (ytMuteSaved === null) { ytMuteSaved = video.muted; }
+                video.muted = true;
+
+                // Live streams report Infinity; seeking past the buffered range throws.
+                if (isFinite(video.duration) && video.duration > 0.25) {
+                    video.currentTime = Math.max(0, video.duration - 0.15);
+                }
+            } catch (e) {}
+        }
+
+        var junk = document.querySelectorAll(
+            '.ytp-ad-overlay-container, .ytp-ad-image-overlay, .ytp-ad-text-overlay,' +
+            ' .ytp-ad-progress-list, .ytp-ad-survey, #player-ads, #masthead-ad'
+        );
+        for (var j = 0; j < junk.length; j++) {
+            junk[j].style.display = 'none';
+        }
+    }
+
+    function installYouTubeWatch() {
+        if (!isYouTube()) { return; }
+
+        installPlayerResponseTrap();
+
+        if (window.__auraYtWatch) { return; }
+        window.__auraYtWatch = true;
+
+        setInterval(killYouTubeAd, 250);
+
+        document.addEventListener('yt-navigate-finish', function () {
+            // SPA navigation: forget the previous video's mute state.
+            ytMuteSaved = null;
+            killYouTubeAd();
+        });
     }
 
     // ---- Run ------------------------------------------------------------
     function sweep() {
         injectCss();
         killAdFrames();
-        handleYouTube();
     }
 
     function installObserver() {
@@ -1332,29 +1405,29 @@ namespace SimpleBrowser
             pending = true;
             setTimeout(function () {
                 pending = false;
-                removeMatching(document);
-                handleYouTube();
+                killAdFrames();
             }, 250);
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
     }
+
+    // Must run before YouTube's own inline scripts assign the player response.
+    installPlayerResponseTrap();
+    installYouTubeWatch();
 
     sweep();
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             sweep();
-            removeMatching(document);
             installObserver();
         });
     } else {
-        removeMatching(document);
         installObserver();
     }
 
     window.addEventListener('load', function () {
         sweep();
-        removeMatching(document);
     });
 })();
 ";
