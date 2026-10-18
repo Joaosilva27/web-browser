@@ -24,6 +24,9 @@ namespace SimpleBrowser
         private const int HTBOTTOMRIGHT = 17;
         private const int BorderResizeMargin = 6;
 
+        [DllImport("user32.dll")]
+        private static extern short GetKeyState(int nVirtKey);
+
         private WebView2 _chromeWebView;
         private Panel _contentPanel;
         private TabControl _tabControl;
@@ -35,8 +38,11 @@ namespace SimpleBrowser
 
         public MainForm()
         {
+            Theme.LoadPreference();
             _bookmarkManager = new BookmarkManager();
             _historyManager = new HistoryManager();
+
+            Application.AddMessageFilter(new ShortcutFilter(this));
 
             InitializeWindow();
             InitializeChrome();
@@ -45,46 +51,48 @@ namespace SimpleBrowser
 
         private void InitializeWindow()
         {
-            Text = "Brave";
+            Text = "Aura";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(1280, 820);
-            MinimumSize = new Size(600, 400);
-            BackColor = Color.FromArgb(30, 32, 41);
+            MinimumSize = new Size(620, 420);
+            BackColor = Theme.WindowBackground;
             DoubleBuffered = true;
             SetStyle(ControlStyles.ResizeRedraw, true);
 
-            // Top Chrome WebView2 Container (Height: 110 for exact Brave tabstrip + toolbar + bookmarks bar)
+            // Top chrome WebView2: tab strip + toolbar, rendered as one HTML surface.
             _chromeWebView = new WebView2();
             _chromeWebView.Dock = DockStyle.Top;
-            _chromeWebView.Height = 110;
-            _chromeWebView.DefaultBackgroundColor = Color.FromArgb(30, 32, 41);
+            _chromeWebView.Height = ChromeHtml.ChromeHeight;
+            _chromeWebView.DefaultBackgroundColor = Theme.ChromeTop;
 
             // Main Content Area
             _contentPanel = new Panel();
             _contentPanel.Dock = DockStyle.Fill;
-            _contentPanel.BackColor = Color.FromArgb(17, 16, 25);
+            _contentPanel.BackColor = Theme.ContentBackground;
 
             _tabControl = new TabControl();
-            _tabControl.Dock = DockStyle.Fill;
             _tabControl.ItemSize = new Size(0, 1);
             _tabControl.SizeMode = TabSizeMode.Fixed;
             _tabControl.Appearance = TabAppearance.Buttons;
             _tabControl.Padding = new Point(0, 0);
+            _tabControl.BackColor = Theme.ContentBackground;
             _tabControl.SelectedIndexChanged += delegate
             {
                 SyncAllToChrome();
             };
 
             _contentPanel.Controls.Add(_tabControl);
+            _contentPanel.Resize += delegate { LayoutTabs(); };
 
             Controls.Add(_contentPanel);
             Controls.Add(_chromeWebView);
 
+            LayoutTabs();
             // Subtle border
             Paint += (s, e) =>
             {
-                using (var pen = new Pen(Color.FromArgb(50, 53, 68), 1))
+                using (var pen = new Pen(Theme.Border, 1))
                 {
                     e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
                 }
@@ -95,6 +103,30 @@ namespace SimpleBrowser
             _shieldsTimer.Interval = 2000;
             _shieldsTimer.Tick += delegate { SyncShields(); };
             _shieldsTimer.Start();
+
+            Theme.Changed += ApplyTheme;
+        }
+
+        private void ApplyTheme()
+        {
+            BackColor = Theme.WindowBackground;
+            _chromeWebView.DefaultBackgroundColor = Theme.ChromeTop;
+            _contentPanel.BackColor = Theme.ContentBackground;
+            _tabControl.BackColor = Theme.ContentBackground;
+
+            if (_chromeWebView.CoreWebView2 != null)
+            {
+                _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                    "document.body.className='" + (Theme.IsDark ? "dark" : "light") + "';");
+            }
+
+            foreach (TabPage page in _tabControl.TabPages)
+            {
+                var tab = page as BrowserTab;
+                if (tab != null) tab.ApplyTheme();
+            }
+
+            Invalidate(true);
         }
 
         private async void InitializeChrome()
@@ -121,11 +153,11 @@ namespace SimpleBrowser
                     SyncAllToChrome();
                 };
 
-                _chromeWebView.NavigateToString(ChromeHtml.GetHtml());
+                _chromeWebView.NavigateToString(ChromeHtml.GetHtml(Theme.IsDark));
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error initializing Brave Chrome: " + ex.Message, "Brave Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Error initializing Aura chrome: " + ex.Message, "Aura Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -169,6 +201,7 @@ namespace SimpleBrowser
                         if (ActiveTab != null)
                         {
                             ActiveTab.Navigate(targetUrl);
+                            FocusContent();
                         }
                         break;
                     case "back":
@@ -179,6 +212,9 @@ namespace SimpleBrowser
                         break;
                     case "reload":
                         if (ActiveTab != null) ActiveTab.Reload();
+                        break;
+                    case "stop":
+                        if (ActiveTab != null) ActiveTab.Stop();
                         break;
                     case "home":
                         if (ActiveTab != null) ActiveTab.LoadHomePage();
@@ -197,6 +233,27 @@ namespace SimpleBrowser
                         break;
                     case "menu":
                         ShowBraveMenu();
+                        break;
+                    case "share":
+                        ShareCurrentPage();
+                        break;
+                    case "about":
+                        ShowAbout();
+                        break;
+                    case "focus_url":
+                        FocusUrlBar();
+                        break;
+                    case "blur_url":
+                        FocusContent();
+                        break;
+                    case "close_active_tab":
+                        CloseTabAt(_tabControl.SelectedIndex);
+                        break;
+                    case "next_tab":
+                        CycleTab(1);
+                        break;
+                    case "prev_tab":
+                        CycleTab(-1);
                         break;
                 }
             }
@@ -292,7 +349,18 @@ namespace SimpleBrowser
             {
                 string title = _tabControl.TabPages[i].Text;
                 if (string.IsNullOrEmpty(title)) title = "New Tab";
-                tabItems.Add(string.Format("{{\"title\":\"{0}\"}}", EscapeJs(title)));
+
+                string url = "";
+                var browserTab = _tabControl.TabPages[i] as BrowserTab;
+                if (browserTab != null)
+                {
+                    if (!string.IsNullOrEmpty(browserTab.DisplayTitle)) title = browserTab.DisplayTitle;
+                    url = browserTab.CurrentUrl ?? "";
+                    if (url == "about:home") url = "";
+                }
+
+                tabItems.Add(string.Format("{{\"title\":\"{0}\",\"url\":\"{1}\"}}",
+                    EscapeJs(title), EscapeJs(url)));
             }
             string json = "[" + string.Join(",", tabItems.ToArray()) + "]";
             int activeIndex = _tabControl.SelectedIndex;
@@ -314,8 +382,12 @@ namespace SimpleBrowser
             if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
             bool canBack = ActiveTab != null && ActiveTab.CanGoBack;
             bool canForward = ActiveTab != null && ActiveTab.CanGoForward;
+            bool loading = ActiveTab != null && ActiveTab.IsLoading;
             _chromeWebView.CoreWebView2.ExecuteScriptAsync(
-                string.Format("window.BraveAPI && window.BraveAPI.setNavState({0}, {1});", canBack ? "true" : "false", canForward ? "true" : "false"));
+                string.Format("window.BraveAPI && window.BraveAPI.setNavState({0}, {1}, {2});",
+                    canBack ? "true" : "false",
+                    canForward ? "true" : "false",
+                    loading ? "true" : "false"));
         }
 
         private void SyncBookmarked()
@@ -357,8 +429,147 @@ namespace SimpleBrowser
         {
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
             var shield = new BraveShieldsForm(url);
-            shield.Location = new Point(Math.Max(10, Right - 350), Top + 80);
+            shield.Location = new Point(Math.Max(10, Right - 356), Top + ChromeHtml.ChromeHeight + 6);
             shield.Show(this);
+        }
+
+        private void FocusContent()
+        {
+            BeginInvoke(new Action(delegate
+            {
+                if (ActiveTab != null && ActiveTab.WebView != null)
+                {
+                    ActiveTab.WebView.Focus();
+                }
+            }));
+        }
+
+        private void FocusUrlBar()
+        {
+            // Defer: moving focus during PreFilterMessage can be undone by the
+            // control that still owns the key message.
+            BeginInvoke(new Action(delegate
+            {
+                if (_chromeWebView.CoreWebView2 == null) return;
+
+                _chromeWebView.Focus();
+                _chromeWebView.CoreWebView2.PostWebMessageAsJson("{\"action\":\"focus_url\"}");
+                _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                    "window.BraveAPI && window.BraveAPI.focusUrl();");
+            }));
+        }
+
+        private void LayoutTabs()
+        {
+            if (_tabControl == null || _contentPanel == null) return;
+
+            int w = _contentPanel.ClientSize.Width;
+            int h = _contentPanel.ClientSize.Height;
+            if (w <= 0 || h <= 0) return;
+
+            // A TabControl insets its pages by the system-drawn border and tab
+            // header (4px left, 5px top, 4px right/bottom with our 1px header).
+            // Oversize and lift it so that inset lands outside the panel and the
+            // page meets the chrome with no system-coloured frame.
+            _tabControl.Bounds = new Rectangle(-4, -5, w + 8, h + 9);
+        }
+
+        private void CycleTab(int delta)
+        {
+            int count = _tabControl.TabPages.Count;
+            if (count < 2) return;
+            _tabControl.SelectedIndex = (_tabControl.SelectedIndex + delta + count) % count;
+        }
+
+        private void ShareCurrentPage()
+        {
+            if (ActiveTab == null) return;
+            string url = ActiveTab.CurrentUrl;
+            if (string.IsNullOrEmpty(url) || url == "about:home") return;
+
+            try
+            {
+                Clipboard.SetText(url);
+                if (_chromeWebView.CoreWebView2 != null)
+                {
+                    _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                        "window.BraveAPI && window.BraveAPI.toast('Link copied');");
+                }
+            }
+            catch
+            {
+                // The clipboard can be briefly locked by another process.
+            }
+        }
+
+        private void ShowAbout()
+        {
+            MessageBox.Show(
+                "Aura\n\n" +
+                "A lightweight browser with a Safari-inspired interface and Brave-grade Shields.\n\n" +
+                "Chromium engine powered by Microsoft Edge WebView2.\n" +
+                "Version 2.0",
+                "About Aura",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        internal bool HandleShortcutKey(int vk)
+        {
+            if (ActiveForm != this) return false;
+
+            bool ctrl = (GetKeyState(0x11) & 0x8000) != 0;
+            bool alt = (GetKeyState(0x12) & 0x8000) != 0;
+            bool shift = (GetKeyState(0x10) & 0x8000) != 0;
+
+            string action = null;
+
+            if (ctrl && !alt)
+            {
+                switch (vk)
+                {
+                    case 0x54: action = "new_tab"; break;                          // Ctrl+T
+                    case 0x57: action = "close_tab"; break;                        // Ctrl+W
+                    case 0x4C: action = "focus_url"; break;                        // Ctrl+L
+                    case 0x52: action = "reload"; break;                           // Ctrl+R
+                    case 0x44: action = "bookmark"; break;                         // Ctrl+D
+                    case 0x48: action = "history"; break;                          // Ctrl+H
+                    case 0x55: action = "source"; break;                           // Ctrl+U
+                    case 0x09: action = shift ? "prev_tab" : "next_tab"; break;    // Ctrl+Tab
+                }
+            }
+            else if (alt && !ctrl)
+            {
+                if (vk == 0x25) action = "back";        // Alt+Left
+                else if (vk == 0x27) action = "forward"; // Alt+Right
+            }
+            else if (!ctrl && !alt && vk == 0x74)       // F5
+            {
+                action = "reload";
+            }
+
+            if (action == null) return false;
+
+            HandleShortcutAction(action);
+            return true;
+        }
+
+        private void HandleShortcutAction(string action)
+        {
+            switch (action)
+            {
+                case "new_tab": AddNewTab(); break;
+                case "close_tab": CloseTabAt(_tabControl.SelectedIndex); break;
+                case "focus_url": FocusUrlBar(); break;
+                case "reload": if (ActiveTab != null) ActiveTab.Reload(); break;
+                case "bookmark": ToggleBookmarkCurrent(); break;
+                case "history": ShowHistory(); break;
+                case "source": ShowPageSource(); break;
+                case "back": if (ActiveTab != null) ActiveTab.GoBack(); break;
+                case "forward": if (ActiveTab != null) ActiveTab.GoForward(); break;
+                case "next_tab": CycleTab(1); break;
+                case "prev_tab": CycleTab(-1); break;
+            }
         }
 
         private void ShowHistory()
@@ -390,24 +601,53 @@ namespace SimpleBrowser
         private void ShowBraveMenu()
         {
             var menu = new ContextMenuStrip();
-            menu.BackColor = Color.FromArgb(30, 32, 41);
-            menu.ForeColor = Color.White;
+            menu.BackColor = Theme.CardBackground;
+            menu.ForeColor = Theme.TextPrimary;
+            menu.Font = new Font("Segoe UI", 9.5F);
+            menu.ShowImageMargin = false;
+            menu.ShowCheckMargin = false;
+            menu.Padding = new Padding(5, 6, 5, 6);
+            menu.Renderer = new ToolStripProfessionalRenderer(new AuraMenuColors());
 
-            var newTabItem = new ToolStripMenuItem("New Tab\tCtrl+T", null, delegate { AddNewTab(); });
-            var bookmarksItem = new ToolStripMenuItem("Bookmark Page\tCtrl+D", null, delegate { ToggleBookmarkCurrent(); });
-            var historyItem = new ToolStripMenuItem("History\tCtrl+H", null, delegate { ShowHistory(); });
-            var sourceItem = new ToolStripMenuItem("View Page Source\tCtrl+U", null, delegate { ShowPageSource(); });
-            var shieldItem = new ToolStripMenuItem("🦁 Brave Shields...", null, delegate { ShowBraveShields(); });
-            var aboutItem = new ToolStripMenuItem("About Brave Browser Edition...", null, delegate
+            var newTabItem = new ToolStripMenuItem("New Tab", null, delegate { AddNewTab(); });
+            newTabItem.ShortcutKeyDisplayString = "Ctrl+T";
+
+            var bookmarksItem = new ToolStripMenuItem("Bookmark This Page", null, delegate { ToggleBookmarkCurrent(); });
+            bookmarksItem.ShortcutKeyDisplayString = "Ctrl+D";
+
+            var historyItem = new ToolStripMenuItem("History", null, delegate { ShowHistory(); });
+            historyItem.ShortcutKeyDisplayString = "Ctrl+H";
+
+            var sourceItem = new ToolStripMenuItem("View Page Source", null, delegate { ShowPageSource(); });
+            sourceItem.ShortcutKeyDisplayString = "Ctrl+U";
+
+            var shieldItem = new ToolStripMenuItem("Aura Shields", null, delegate { ShowBraveShields(); });
+
+            var appearanceItem = new ToolStripMenuItem("Appearance");
+            var lightItem = new ToolStripMenuItem("Light", null, delegate { Theme.SetPreference("light"); });
+            var darkItem = new ToolStripMenuItem("Dark", null, delegate { Theme.SetPreference("dark"); });
+            var systemItem = new ToolStripMenuItem("Use System Theme", null, delegate { Theme.SetPreference("system"); });
+            appearanceItem.DropDownItems.Add(lightItem);
+            appearanceItem.DropDownItems.Add(darkItem);
+            appearanceItem.DropDownItems.Add(new ToolStripSeparator());
+            appearanceItem.DropDownItems.Add(systemItem);
+
+            var appearanceMenu = appearanceItem.DropDown as ToolStripDropDownMenu;
+            if (appearanceMenu != null)
             {
-                MessageBox.Show(
-                    "Brave Browser Desktop Edition\n\n" +
-                    "Exact Brave Browser UI, Brave Shields, Brave Search, and Edge Chromium engine.\n\n" +
-                    "Version 1.0 (Official UI Replica)",
-                    "About Brave",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            });
+                appearanceMenu.ShowCheckMargin = true;
+                appearanceMenu.ShowImageMargin = false;
+            }
+
+            menu.Opening += delegate
+            {
+                lightItem.Checked = Theme.Preference == "light";
+                darkItem.Checked = Theme.Preference == "dark";
+                systemItem.Checked = Theme.Preference == "system";
+            };
+
+            var aboutItem = new ToolStripMenuItem("About Aura", null, delegate { ShowAbout(); });
+            var quitItem = new ToolStripMenuItem("Quit Aura", null, delegate { Close(); });
 
             menu.Items.Add(newTabItem);
             menu.Items.Add(bookmarksItem);
@@ -415,9 +655,12 @@ namespace SimpleBrowser
             menu.Items.Add(sourceItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(shieldItem);
+            menu.Items.Add(appearanceItem);
             menu.Items.Add(aboutItem);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(quitItem);
 
-            menu.Show(PointToScreen(new Point(Width - 190, 80)));
+            menu.Show(PointToScreen(new Point(Width - 208, ChromeHtml.ChromeHeight + 4)));
         }
 
         // Native Resizing
@@ -475,5 +718,41 @@ namespace SimpleBrowser
             }
             return -1;
         }
+    }
+
+    /// <summary>
+    /// Keyboard shortcuts have to be caught before the WebView2 child window
+    /// swallows them, so they are filtered at the application message loop.
+    /// </summary>
+    internal class ShortcutFilter : IMessageFilter
+    {
+        private readonly MainForm _form;
+
+        public ShortcutFilter(MainForm form)
+        {
+            _form = form;
+        }
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            // WM_KEYDOWN / WM_SYSKEYDOWN
+            if (m.Msg != 0x0100 && m.Msg != 0x0104) return false;
+            return _form.HandleShortcutKey(m.WParam.ToInt32());
+        }
+    }
+
+    internal class AuraMenuColors : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground { get { return Theme.CardBackground; } }
+        public override Color ImageMarginGradientBegin { get { return Theme.CardBackground; } }
+        public override Color ImageMarginGradientMiddle { get { return Theme.CardBackground; } }
+        public override Color ImageMarginGradientEnd { get { return Theme.CardBackground; } }
+        public override Color MenuItemSelected { get { return Theme.Tint(Theme.AccentBlue, 34); } }
+        public override Color MenuItemSelectedGradientBegin { get { return Theme.Tint(Theme.AccentBlue, 34); } }
+        public override Color MenuItemSelectedGradientEnd { get { return Theme.Tint(Theme.AccentBlue, 34); } }
+        public override Color MenuItemBorder { get { return Color.Transparent; } }
+        public override Color MenuBorder { get { return Theme.CardBorder; } }
+        public override Color SeparatorDark { get { return Theme.CardBorder; } }
+        public override Color SeparatorLight { get { return Theme.CardBorder; } }
     }
 }

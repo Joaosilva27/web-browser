@@ -4,312 +4,375 @@ namespace SimpleBrowser
 {
     public static class HomePage
     {
-        public static string GetHtml()
+        public static string GetHtml(bool dark)
         {
-            return @"<!DOCTYPE html>
+            int blocked = AdBlocker.BlockedCount;
+            string shieldsNote = blocked > 0
+                ? blocked.ToString("N0") + " trackers &amp; ads blocked this session"
+                : "Aura Shields are active";
+
+            string html = @"<!DOCTYPE html>
 <html lang='en'>
 <head>
-    <meta http-equiv='X-UA-Compatible' content='IE=edge' />
-    <meta charset='utf-8' />
-    <title>New Tab</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+<meta charset='utf-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>New Tab</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: radial-gradient(circle at 50% 20%, #1e1b38 0%, #111019 70%, #0a0910 100%);
-            color: #ffffff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 30px 40px;
-            overflow-x: hidden;
-        }
+    body {
+        --text: #1d1d1f;
+        --text2: #6e6e73;
+        --text3: #9a9aa0;
+        --field: #ffffff;
+        --field-line: rgba(0, 0, 0, 0.06);
+        --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.07);
+        --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+        --hover: rgba(0, 0, 0, 0.045);
+        --accent: #007aff;
+        --ring: rgba(0, 122, 255, 0.16);
+        --orange: #f25a29;
+        --green: #34c759;
 
-        /* Top Row Stats */
-        .top-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            width: 100%;
-        }
-        .stats-container {
-            display: flex;
-            gap: 28px;
-        }
-        .stat-item {
-            display: flex;
-            flex-direction: column;
-        }
-        .stat-value {
-            font-size: 26px;
-            font-weight: 700;
-            color: #fb542b;
-            letter-spacing: -0.5px;
-        }
-        .stat-label {
-            font-size: 11px;
-            color: #9fa4b2;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            margin-top: 2px;
-        }
-        .brave-badge {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(251, 84, 43, 0.15);
-            border: 1px solid rgba(251, 84, 43, 0.4);
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-            color: #ff7654;
-        }
+        min-height: 100vh;
+        font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont,
+                     'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+        color: var(--text);
+        background:
+            radial-gradient(1000px 520px at 50% -10%, #dbe8ff 0%, rgba(219, 232, 255, 0) 60%),
+            radial-gradient(720px 420px at 86% 112%, rgba(255, 226, 214, 0.55) 0%, rgba(255, 226, 214, 0) 62%),
+            linear-gradient(180deg, #f8f9fc 0%, #eef0f5 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: auto;
+        -webkit-font-smoothing: antialiased;
+    }
 
-        /* Center Content */
-        .center-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            margin: auto 0;
-            width: 100%;
-        }
-        .clock {
-            font-size: 82px;
-            font-weight: 300;
-            letter-spacing: -2px;
-            margin-bottom: 4px;
-            text-shadow: 0 4px 18px rgba(0,0,0,0.5);
-        }
-        .greeting {
-            font-size: 22px;
-            font-weight: 400;
-            color: #c7cbd6;
-            margin-bottom: 30px;
-        }
+    body.dark {
+        --text: #f5f5f7;
+        --text2: #a1a1a6;
+        --text3: #8a8a90;
+        --field: #2a2a2d;
+        --field-line: rgba(255, 255, 255, 0.07);
+        --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 26px rgba(0, 0, 0, 0.28);
+        --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.40);
+        --hover: rgba(255, 255, 255, 0.06);
+        --accent: #0a84ff;
+        --ring: rgba(10, 132, 255, 0.22);
+        --orange: #ff6b3d;
+        --green: #30d158;
 
-        /* Brave Search Bar */
-        .search-form {
-            width: 100%;
-            max-width: 650px;
-            position: relative;
-            margin-bottom: 40px;
-        }
-        .search-wrapper {
-            display: flex;
-            align-items: center;
-            background: #1e202d;
-            border: 2px solid #2d3042;
-            border-radius: 30px;
-            padding: 4px 18px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-            transition: all 0.2s ease;
-        }
-        .search-wrapper:hover {
-            border-color: #3f435c;
-        }
-        .search-wrapper:focus-within {
-            border-color: #fb542b;
-            box-shadow: 0 8px 32px rgba(251, 84, 43, 0.25);
-            background: #232536;
-        }
-        .search-icon {
-            font-size: 18px;
-            color: #fb542b;
-            margin-right: 12px;
-        }
-        .search-input {
-            width: 100%;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: #ffffff;
-            font-size: 16px;
-            padding: 12px 0;
-        }
-        .search-input::placeholder {
-            color: #7b8194;
-        }
-        .search-btn {
-            background: #fb542b;
-            border: none;
-            color: #fff;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 13px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .search-btn:hover {
-            background: #ff6a45;
-        }
+        background:
+            radial-gradient(1000px 520px at 50% -10%, #26364f 0%, rgba(38, 54, 79, 0) 60%),
+            radial-gradient(720px 420px at 86% 112%, rgba(84, 48, 32, 0.38) 0%, rgba(84, 48, 32, 0) 62%),
+            linear-gradient(180deg, #17191e 0%, #0f1013 100%);
+    }
 
-        /* Shortcuts Grid */
-        .shortcuts-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 16px;
-            max-width: 720px;
-            width: 100%;
-        }
-        .shortcut-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: rgba(30, 32, 45, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 16px;
-            padding: 16px 10px;
-            text-decoration: none;
-            color: #e2e5ec;
-            transition: all 0.2s ease;
-        }
-        .shortcut-card:hover {
-            transform: translateY(-4px);
-            background: rgba(45, 48, 68, 0.85);
-            border-color: #fb542b;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-            color: #fff;
-        }
-        .shortcut-icon {
-            font-size: 26px;
-            margin-bottom: 8px;
-        }
-        .shortcut-title {
-            font-size: 12px;
-            font-weight: 500;
-        }
+    .stage {
+        width: 100%;
+        max-width: 700px;
+        padding: 40px 28px 90px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
 
-        /* Footer */
-        .footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 12px;
-            color: #6c7283;
-            width: 100%;
-        }
-        kbd {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #fff;
-        }
-    </style>
+    .date {
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--text3);
+        margin-bottom: 6px;
+    }
+
+    .clock {
+        font-size: 60px;
+        font-weight: 200;
+        letter-spacing: -2.6px;
+        line-height: 1.06;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: 30px;
+    }
+
+    /* ── Search ───────────────────────────────────────────────────────── */
+
+    .search {
+        width: 100%;
+        max-width: 600px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        height: 48px;
+        padding: 0 8px 0 16px;
+        border-radius: 13px;
+        background: var(--field);
+        border: 1px solid var(--field-line);
+        box-shadow: var(--field-shadow);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        margin-bottom: 34px;
+    }
+    .search:hover { border-color: rgba(0, 0, 0, 0.10); }
+    body.dark .search:hover { border-color: rgba(255, 255, 255, 0.12); }
+    .search:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px var(--ring), var(--field-shadow);
+    }
+
+    .search-icon {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        fill: none;
+        stroke: var(--text3);
+        stroke-width: 1.8;
+        stroke-linecap: round;
+    }
+
+    .search-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 14.5px;
+        letter-spacing: -0.01em;
+    }
+    .search-input::placeholder { color: var(--text3); }
+
+    .search-go {
+        flex: none;
+        height: 32px;
+        padding: 0 14px;
+        border: none;
+        border-radius: 9px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        cursor: pointer;
+        opacity: 0;
+        transform: scale(0.96);
+        transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    }
+    .search:focus-within .search-go,
+    .search.has-text .search-go {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .search-go:hover { background: #006ae0; }
+    body.dark .search-go:hover { background: #3b9bff; }
+
+    /* ── Favorites ────────────────────────────────────────────────────── */
+
+    .favorites {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px 2px;
+        max-width: 620px;
+        width: 100%;
+    }
+
+    .fav {
+        width: 74px;
+        padding: 9px 4px 8px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.14s ease, transform 0.14s ease;
+    }
+    .fav:hover { background: var(--hover); transform: translateY(-2px); }
+
+    .tile {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        box-shadow: var(--tile-shadow);
+    }
+
+    .label {
+        margin-top: 7px;
+        max-width: 100%;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: -0.015em;
+        color: var(--text2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .fav:hover .label { color: var(--text); }
+
+    /* ── Footer ───────────────────────────────────────────────────────── */
+
+    .footer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 54px;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11.5px;
+        color: var(--text3);
+        pointer-events: none;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+    }
+    .brand svg {
+        width: 14px;
+        height: 14px;
+        fill: none;
+        stroke: var(--orange);
+        stroke-width: 1.7;
+        stroke-linejoin: round;
+    }
+
+    .shields-note { display: flex; align-items: center; gap: 7px; }
+    .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.16);
+    }
+
+    @media (max-width: 560px) {
+        .clock { font-size: 46px; }
+        .footer { display: none; }
+    }
+</style>
 </head>
-<body>
-    <div class='top-row'>
-        <div class='stats-container'>
-            <div class='stat-item'>
-                <div class='stat-value'>1,842</div>
-                <div class='stat-label'>Trackers &amp; Ads Blocked</div>
-            </div>
-            <div class='stat-item'>
-                <div class='stat-value'>24.6 MB</div>
-                <div class='stat-label'>Bandwidth Saved</div>
-            </div>
-            <div class='stat-item'>
-                <div class='stat-value'>1.8 m</div>
-                <div class='stat-label'>Time Saved</div>
-            </div>
-        </div>
-        <div class='brave-badge'>
-            <span>🦁</span> Brave Shields Active
-        </div>
-    </div>
+<body class='__THEME__'>
 
-    <div class='center-content'>
-        <div class='clock' id='clock-display'>12:00</div>
-        <div class='greeting' id='greeting-display'>Good evening</div>
+    <div class='stage'>
+        <div class='date' id='date'></div>
+        <div class='clock' id='clock'>--:--</div>
 
-        <form class='search-form' action='https://search.brave.com/search' method='GET'>
-            <div class='search-wrapper'>
-                <div class='search-icon'>🦁</div>
-                <input class='search-input' type='text' name='q' placeholder='Search with Brave or enter a site address...' autofocus />
-                <button class='search-btn' type='submit'>Search</button>
-            </div>
+        <form class='search' id='search' action='https://search.brave.com/search' method='GET'>
+            <svg class='search-icon' viewBox='0 0 24 24'><circle cx='11' cy='11' r='6.5'/><path d='M16 16l4.5 4.5'/></svg>
+            <input class='search-input' id='search-input' type='text' name='q'
+                   placeholder='Search Brave or enter a website' autocomplete='off'
+                   autocapitalize='off' spellcheck='false' />
+            <button class='search-go' type='submit'>Search</button>
         </form>
 
-        <div class='shortcuts-grid'>
-            <a class='shortcut-card' href='https://search.brave.com'>
-                <div class='shortcut-icon'>🦁</div>
-                <div class='shortcut-title'>Brave Search</div>
+        <div class='favorites'>
+            <a class='fav' href='https://search.brave.com'>
+                <span class='tile' style='background:#f25a29'>B</span>
+                <span class='label'>Brave Search</span>
             </a>
-            <a class='shortcut-card' href='https://github.com'>
-                <div class='shortcut-icon'>🐙</div>
-                <div class='shortcut-title'>GitHub</div>
+            <a class='fav' href='https://github.com'>
+                <span class='tile' style='background:#24292f'>G</span>
+                <span class='label'>GitHub</span>
             </a>
-            <a class='shortcut-card' href='https://youtube.com'>
-                <div class='shortcut-icon'>▶️</div>
-                <div class='shortcut-title'>YouTube</div>
+            <a class='fav' href='https://youtube.com'>
+                <span class='tile' style='background:#ff0033'>Y</span>
+                <span class='label'>YouTube</span>
             </a>
-            <a class='shortcut-card' href='https://reddit.com'>
-                <div class='shortcut-icon'>💬</div>
-                <div class='shortcut-title'>Reddit</div>
+            <a class='fav' href='https://reddit.com'>
+                <span class='tile' style='background:#ff4500'>R</span>
+                <span class='label'>Reddit</span>
             </a>
-            <a class='shortcut-card' href='https://wikipedia.org'>
-                <div class='shortcut-icon'>📚</div>
-                <div class='shortcut-title'>Wikipedia</div>
+            <a class='fav' href='https://wikipedia.org'>
+                <span class='tile' style='background:#54595d'>W</span>
+                <span class='label'>Wikipedia</span>
             </a>
-            <a class='shortcut-card' href='https://news.ycombinator.com'>
-                <div class='shortcut-icon'>⚡</div>
-                <div class='shortcut-title'>Hacker News</div>
+            <a class='fav' href='https://news.ycombinator.com'>
+                <span class='tile' style='background:#ff6600'>H</span>
+                <span class='label'>Hacker News</span>
+            </a>
+            <a class='fav' href='https://mail.google.com'>
+                <span class='tile' style='background:#ea4335'>M</span>
+                <span class='label'>Gmail</span>
+            </a>
+            <a class='fav' href='https://x.com'>
+                <span class='tile' style='background:#1d1d1f'>X</span>
+                <span class='label'>X</span>
             </a>
         </div>
     </div>
 
     <div class='footer'>
-        <div>Press <kbd>Ctrl+T</kbd> for New Tab &bull; <kbd>Ctrl+H</kbd> for History &bull; <kbd>Ctrl+D</kbd> to Bookmark</div>
-        <div>Brave Browser Edition &bull; Fast, Private &amp; Secure</div>
+        <div class='brand'>
+            <svg viewBox='0 0 24 24'><path d='M12 3.2 5.2 6v5.3c0 4.35 2.9 7.6 6.8 9.5 3.9-1.9 6.8-5.15 6.8-9.5V6L12 3.2z'/></svg>
+            Aura
+        </div>
+        <div class='shields-note'>
+            <span class='dot'></span>__SHIELDS__
+        </div>
     </div>
 
-    <script>
-        function updateClock() {
-            var now = new Date();
-            var hours = now.getHours();
-            var minutes = now.getMinutes();
-            var formattedHours = hours < 10 ? '0' + hours : hours;
-            var formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
-            document.getElementById('clock-display').innerText = formattedHours + ':' + formattedMinutes;
+<script>
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
-            var greeting = 'Good evening';
-            if (hours >= 5 && hours < 12) {
-                greeting = 'Good morning';
-            } else if (hours >= 12 && hours < 18) {
-                greeting = 'Good afternoon';
-            }
-            document.getElementById('greeting-display').innerText = greeting;
-        }
-        updateClock();
-        setInterval(updateClock, 1000);
+    function tick() {
+        var now = new Date();
+        document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
+        document.getElementById('date').textContent = now.toLocaleDateString(undefined, {
+            weekday: 'long', month: 'long', day: 'numeric'
+        });
+    }
+    tick();
+    setInterval(tick, 1000);
 
-        var form = document.querySelector('.search-form');
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                var input = document.querySelector('.search-input');
-                if (!input) return;
-                var val = input.value.trim();
-                if (!val) {
-                    e.preventDefault();
-                    return;
-                }
-                if (val.indexOf('http://') === 0 || val.indexOf('https://') === 0) {
-                    window.location.href = val;
-                    e.preventDefault();
-                } else if (val.indexOf('.') !== -1 && val.indexOf(' ') === -1) {
-                    window.location.href = 'https://' + val;
-                    e.preventDefault();
-                }
-            });
+    var form = document.getElementById('search');
+    var input = document.getElementById('search-input');
+
+    input.addEventListener('input', function () {
+        form.classList.toggle('has-text', input.value.trim().length > 0);
+    });
+
+    form.addEventListener('submit', function (e) {
+        var value = input.value.trim();
+        if (!value) { e.preventDefault(); return; }
+
+        if (value.indexOf('http://') === 0 || value.indexOf('https://') === 0) {
+            e.preventDefault();
+            window.location.href = value;
+            return;
         }
-    </script>
+
+        if (value.indexOf(' ') === -1 && value.indexOf('.') !== -1) {
+            e.preventDefault();
+            window.location.href = 'https://' + value;
+            return;
+        }
+
+        input.value = value;
+    });
+</script>
 </body>
 </html>";
+
+            return html
+                .Replace("__THEME__", dark ? "dark" : "light")
+                .Replace("__SHIELDS__", shieldsNote);
         }
     }
 }

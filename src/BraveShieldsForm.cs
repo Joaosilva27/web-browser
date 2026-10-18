@@ -12,184 +12,188 @@ namespace SimpleBrowser
         {
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            Size = new Size(330, 430);
-            BackColor = Color.FromArgb(24, 25, 36);
-            ForeColor = Color.White;
+            Size = new Size(344, 468);
+            BackColor = Theme.CardBackground;
+            ForeColor = Theme.TextPrimary;
             ShowInTaskbar = false;
             TopMost = true;
-
-            var header = new Panel();
-            header.Dock = DockStyle.Top;
-            header.Height = 56;
-            header.BackColor = Color.FromArgb(32, 34, 48);
-            header.Padding = new Padding(16, 12, 16, 12);
-
-            var lionIcon = new Label();
-            lionIcon.Text = "🦁";
-            lionIcon.Font = new Font("Segoe UI", 16F);
-            lionIcon.AutoSize = true;
-            lionIcon.Dock = DockStyle.Left;
+            DoubleBuffered = true;
 
             var title = new Label();
-            title.Text = "Brave Shields";
-            title.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
-            title.ForeColor = Color.FromArgb(251, 84, 43); // Brave Orange
+            title.Text = "Aura Shields";
+            title.Font = new Font("Segoe UI Semibold", 12.5F);
+            title.ForeColor = Theme.TextPrimary;
             title.AutoSize = true;
-            title.Dock = DockStyle.Left;
-            title.TextAlign = ContentAlignment.MiddleLeft;
-            title.Padding = new Padding(8, 2, 0, 0);
+            title.Location = new Point(22, 17);
 
-            var closeBtn = new Button();
-            closeBtn.Text = "✕";
-            closeBtn.Dock = DockStyle.Right;
-            closeBtn.Width = 30;
-            closeBtn.FlatStyle = FlatStyle.Flat;
-            closeBtn.FlatAppearance.BorderSize = 0;
-            closeBtn.ForeColor = Color.LightGray;
-            closeBtn.Cursor = Cursors.Hand;
-            closeBtn.Click += delegate { Close(); };
+            var host = new Label();
+            host.Text = SiteLabel(currentSite);
+            host.Font = new Font("Segoe UI", 8.75F);
+            host.ForeColor = Theme.TextSecondary;
+            host.AutoEllipsis = true;
+            host.AutoSize = false;
+            host.Size = new Size(268, 18);
+            host.Location = new Point(23, 42);
 
-            header.Controls.Add(closeBtn);
-            header.Controls.Add(title);
-            header.Controls.Add(lionIcon);
+            var close = new Label();
+            close.Text = "\u2715";
+            close.Font = new Font("Segoe UI", 9.5F);
+            close.ForeColor = Theme.TextTertiary;
+            close.TextAlign = ContentAlignment.MiddleCenter;
+            close.Size = new Size(26, 26);
+            close.Location = new Point(302, 15);
+            close.Cursor = Cursors.Hand;
+            close.Click += delegate { Close(); };
 
-            var body = new Panel();
-            body.Dock = DockStyle.Fill;
-            body.Padding = new Padding(18);
+            var count = new Label();
+            count.Text = AdBlocker.BlockedCount.ToString("N0");
+            count.Font = new Font("Segoe UI", 30F, FontStyle.Regular);
+            count.ForeColor = Theme.AccentOrange;
+            count.AutoSize = true;
+            count.Location = new Point(19, 68);
 
-            var siteLabel = new Label();
-            siteLabel.Text = string.IsNullOrEmpty(currentSite) ? "Current Site" : currentSite;
-            siteLabel.Font = new Font("Segoe UI", 9.5F);
-            siteLabel.ForeColor = Color.FromArgb(160, 165, 180);
-            siteLabel.Dock = DockStyle.Top;
-            siteLabel.Height = 24;
-            siteLabel.AutoEllipsis = true;
+            var caption = new Label();
+            caption.Text = "trackers & ads blocked this session";
+            caption.Font = new Font("Segoe UI", 8.75F);
+            caption.ForeColor = Theme.TextSecondary;
+            caption.AutoSize = true;
+            caption.Location = new Point(23, 120);
 
-            var statusPanel = new Panel();
-            statusPanel.Dock = DockStyle.Top;
-            statusPanel.Height = 52;
-            statusPanel.BackColor = Color.FromArgb(35, 37, 52);
-            statusPanel.Padding = new Padding(12);
+            var card = new Panel();
+            card.Location = new Point(16, 150);
+            card.Size = new Size(312, 118);
+            card.BackColor = Theme.IsDark
+                ? Color.FromArgb(52, 52, 56)
+                : Color.FromArgb(245, 245, 247);
 
-            var statusText = new Label();
-            statusText.Text = "SHIELDS ARE UP";
-            statusText.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
-            statusText.ForeColor = Color.FromArgb(251, 84, 43);
-            statusText.Dock = DockStyle.Left;
-            statusText.AutoSize = true;
+            card.Controls.Add(CreateRow("Filter rules loaded", AdBlocker.RuleCount.ToString("N0"), 11));
+            card.Controls.Add(CreateRow("HTTPS upgrade", "On", 44));
+            card.Controls.Add(CreateRow("Fingerprinting protection", "Strict", 77));
 
-            var badge = new Label();
-            badge.Text = "ACTIVE";
-            badge.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
-            badge.ForeColor = Color.FromArgb(46, 204, 113);
-            badge.Dock = DockStyle.Right;
-            badge.AutoSize = true;
+            var listTitle = new Label();
+            listTitle.Text = "MOST BLOCKED";
+            listTitle.Font = new Font("Segoe UI", 7.75F, FontStyle.Bold);
+            listTitle.ForeColor = Theme.TextTertiary;
+            listTitle.AutoSize = true;
+            listTitle.Location = new Point(22, 287);
 
-            statusPanel.Controls.Add(badge);
-            statusPanel.Controls.Add(statusText);
+            var list = new Label();
+            list.Text = BuildBlockedList();
+            list.Font = new Font("Segoe UI", 8.75F);
+            list.ForeColor = Theme.TextSecondary;
+            list.AutoSize = false;
+            list.Size = new Size(300, 82);
+            list.Location = new Point(22, 308);
 
-            var statsBox = new GroupBox();
-            statsBox.Text = "Protection Summary";
-            statsBox.ForeColor = Color.FromArgb(160, 165, 180);
-            statsBox.Dock = DockStyle.Top;
-            statsBox.Height = 200;
-            statsBox.Font = new Font("Segoe UI", 8.5F);
+            var done = new AuraButton();
+            done.Text = "Done";
+            done.Size = new Size(312, 38);
+            done.Location = new Point(16, 410);
+            done.Radius = 9;
+            done.BackColor = Theme.AccentOrange;
+            done.Click += delegate { Close(); };
 
-            statsBox.Controls.Add(CreateStatRow("🚫 Trackers & ads blocked", AdBlocker.BlockedCount.ToString(), 28));
-            statsBox.Controls.Add(CreateStatRow("📋 Filter rules loaded", AdBlocker.RuleCount.ToString(), 58));
-            statsBox.Controls.Add(CreateStatRow("🔒 HTTPS Upgrade", "Active", 88));
-            statsBox.Controls.Add(CreateStatRow("🛡️ Fingerprinting protection", "Strict", 118));
-            statsBox.Controls.Add(CreateBlockedHostsList());
+            Controls.Add(title);
+            Controls.Add(host);
+            Controls.Add(close);
+            Controls.Add(count);
+            Controls.Add(caption);
+            Controls.Add(card);
+            Controls.Add(listTitle);
+            Controls.Add(list);
+            Controls.Add(done);
 
-            var doneBtn = new Button();
-            doneBtn.Text = "Done";
-            doneBtn.Dock = DockStyle.Bottom;
-            doneBtn.Height = 36;
-            doneBtn.FlatStyle = FlatStyle.Flat;
-            doneBtn.FlatAppearance.BorderSize = 0;
-            doneBtn.BackColor = Color.FromArgb(251, 84, 43);
-            doneBtn.ForeColor = Color.White;
-            doneBtn.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
-            doneBtn.Cursor = Cursors.Hand;
-            doneBtn.Click += delegate { Close(); };
+            Paint += OnCardPaint;
+        }
 
-            body.Controls.Add(doneBtn);
-            body.Controls.Add(statsBox);
-            body.Controls.Add(statusPanel);
-            body.Controls.Add(siteLabel);
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            Region = Theme.RoundedRegion(ClientRectangle, 14);
+        }
 
-            Controls.Add(body);
-            Controls.Add(header);
-
-            Paint += (s, e) =>
+        protected override CreateParams CreateParams
+        {
+            get
             {
-                using (var pen = new Pen(Color.FromArgb(251, 84, 43), 2))
-                {
-                    e.Graphics.DrawRectangle(pen, 1, 1, Width - 2, Height - 2);
-                }
-            };
+                CreateParams cp = base.CreateParams;
+                cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
+                return cp;
+            }
         }
 
-        private Panel CreateStatRow(string label, string val, int top)
+        private static string SiteLabel(string site)
         {
-            var p = new Panel();
-            p.Location = new Point(12, top);
-            p.Size = new Size(270, 24);
-
-            var l = new Label();
-            l.Text = label;
-            l.ForeColor = Color.White;
-            l.Dock = DockStyle.Left;
-            l.AutoSize = true;
-
-            var v = new Label();
-            v.Text = val;
-            v.ForeColor = Color.FromArgb(251, 84, 43);
-            v.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            v.Dock = DockStyle.Right;
-            v.AutoSize = true;
-
-            p.Controls.Add(v);
-            p.Controls.Add(l);
-            return p;
+            if (string.IsNullOrEmpty(site) || site == "about:home") return "New Tab";
+            try
+            {
+                Uri uri = new Uri(site);
+                return uri.Host.Replace("www.", "");
+            }
+            catch
+            {
+                return site;
+            }
         }
 
-        private Label CreateBlockedHostsList()
+        private Panel CreateRow(string label, string value, int top)
         {
-            List<KeyValuePair<string, int>> ranked = new List<KeyValuePair<string, int>>(AdBlocker.GetBlockedByHost());
+            var row = new Panel();
+            row.Location = new Point(14, top);
+            row.Size = new Size(284, 24);
+
+            var name = new Label();
+            name.Text = label;
+            name.Dock = DockStyle.Fill;
+            name.TextAlign = ContentAlignment.MiddleLeft;
+            name.ForeColor = Theme.TextSecondary;
+            name.Font = new Font("Segoe UI", 8.75F);
+
+            var val = new Label();
+            val.Text = value;
+            val.Dock = DockStyle.Right;
+            val.Width = 96;
+            val.TextAlign = ContentAlignment.MiddleRight;
+            val.ForeColor = Theme.TextPrimary;
+            val.Font = new Font("Segoe UI", 8.75F, FontStyle.Bold);
+
+            row.Controls.Add(name);
+            row.Controls.Add(val);
+            return row;
+        }
+
+        private static string BuildBlockedList()
+        {
+            List<KeyValuePair<string, int>> ranked =
+                new List<KeyValuePair<string, int>>(AdBlocker.GetBlockedByHost());
             ranked.Sort(delegate (KeyValuePair<string, int> a, KeyValuePair<string, int> b)
             {
                 return b.Value.CompareTo(a.Value);
             });
 
-            StringBuilder sb = new StringBuilder();
             if (ranked.Count == 0)
             {
-                sb.Append("Nothing blocked yet this session.");
-            }
-            else
-            {
-                sb.Append("Most blocked:");
-                int shown = ranked.Count < 4 ? ranked.Count : 4;
-                for (int i = 0; i < shown; i++)
-                {
-                    string host = ranked[i].Key;
-                    if (host.Length > 27)
-                    {
-                        host = host.Substring(0, 25) + "..";
-                    }
-                    sb.Append(Environment.NewLine).Append("• ").Append(host)
-                      .Append("  (").Append(ranked[i].Value).Append(")");
-                }
+                return "Nothing blocked yet on this page.";
             }
 
-            Label label = new Label();
-            label.Location = new Point(12, 148);
-            label.Size = new Size(272, 46);
-            label.Font = new Font("Segoe UI", 8F);
-            label.ForeColor = Color.FromArgb(160, 165, 180);
-            label.Text = sb.ToString();
-            return label;
+            StringBuilder sb = new StringBuilder();
+            int shown = ranked.Count < 4 ? ranked.Count : 4;
+            for (int i = 0; i < shown; i++)
+            {
+                string hostName = ranked[i].Key;
+                if (hostName.Length > 34) hostName = hostName.Substring(0, 32) + "..";
+                if (i > 0) sb.Append(Environment.NewLine);
+                sb.Append(hostName).Append("  ").Append(ranked[i].Value);
+            }
+            return sb.ToString();
+        }
+
+        private void OnCardPaint(object sender, PaintEventArgs e)
+        {
+            using (var pen = new Pen(Theme.CardBorder, 1))
+            {
+                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            }
         }
 
         protected override void OnDeactivate(EventArgs e)

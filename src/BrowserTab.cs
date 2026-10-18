@@ -12,10 +12,11 @@ namespace SimpleBrowser
     public class BrowserTab : TabPage
     {
         private WebView2 _webView;
-        private ProgressBar _progressBar;
         private string _pendingUrl;
         private string _topLevelUri;
         private bool _isInitialized;
+        private bool _isLoading;
+        private bool _isHome;
 
         public event Action<BrowserTab, string> UrlChanged;
         public event Action<BrowserTab, string> TitleChanged;
@@ -24,28 +25,24 @@ namespace SimpleBrowser
 
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
+        public string DisplayTitle { get; private set; }
+        public bool IsLoading { get { return _isLoading; } }
         public bool CanGoBack { get { return _webView != null && _isInitialized && _webView.CanGoBack; } }
         public bool CanGoForward { get { return _webView != null && _isInitialized && _webView.CanGoForward; } }
 
         public BrowserTab(string initialUrl = null)
         {
             Text = "New Tab";
-            BackColor = Color.FromArgb(10, 11, 16);
-
-            _progressBar = new ProgressBar();
-            _progressBar.Dock = DockStyle.Top;
-            _progressBar.Height = 2;
-            _progressBar.Visible = false;
-            _progressBar.Style = ProgressBarStyle.Continuous;
+            DisplayTitle = "New Tab";
+            BackColor = Theme.ContentBackground;
 
             _webView = new WebView2();
             _webView.Dock = DockStyle.Fill;
-            _webView.DefaultBackgroundColor = Color.FromArgb(7, 8, 11);
+            _webView.DefaultBackgroundColor = Theme.ContentBackground;
 
             _pendingUrl = string.IsNullOrEmpty(initialUrl) ? "about:home" : initialUrl;
 
             Controls.Add(_webView);
-            Controls.Add(_progressBar);
 
             InitEngine();
         }
@@ -93,13 +90,14 @@ namespace SimpleBrowser
 
         public void LoadHomePage()
         {
+            _isHome = true;
             CurrentUrl = "about:home";
             _topLevelUri = null;
             Text = "New Tab";
 
             if (_isInitialized && _webView.CoreWebView2 != null)
             {
-                _webView.NavigateToString(HomePage.GetHtml());
+                _webView.NavigateToString(HomePage.GetHtml(Theme.IsDark));
             }
             else
             {
@@ -109,6 +107,21 @@ namespace SimpleBrowser
             if (TitleChanged != null) TitleChanged(this, "New Tab");
             if (UrlChanged != null) UrlChanged(this, "");
             if (StateChanged != null) StateChanged(this);
+        }
+
+        /// <summary>Re-applies the current light/dark theme to this tab.</summary>
+        public void ApplyTheme()
+        {
+            BackColor = Theme.ContentBackground;
+            if (_webView == null) return;
+
+            _webView.DefaultBackgroundColor = Theme.ContentBackground;
+
+            if (_isInitialized && _webView.CoreWebView2 != null && _isHome)
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "document.body.className='" + (Theme.IsDark ? "dark" : "light") + "';");
+            }
         }
 
         public void Navigate(string destination)
@@ -147,6 +160,7 @@ namespace SimpleBrowser
 
             CurrentUrl = destination;
             _topLevelUri = destination;
+            _isHome = false;
 
             if (!_isInitialized || _webView.CoreWebView2 == null)
             {
@@ -156,8 +170,6 @@ namespace SimpleBrowser
 
             try
             {
-                _progressBar.Value = 30;
-                _progressBar.Visible = true;
                 _webView.CoreWebView2.Navigate(destination);
             }
             catch (Exception ex)
@@ -187,6 +199,14 @@ namespace SimpleBrowser
             if (_isInitialized && _webView.CoreWebView2 != null)
             {
                 _webView.Reload();
+            }
+        }
+
+        public void Stop()
+        {
+            if (_isInitialized && _webView.CoreWebView2 != null)
+            {
+                _webView.CoreWebView2.Stop();
             }
         }
 
@@ -275,22 +295,28 @@ namespace SimpleBrowser
 
         private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
-            _progressBar.Value = 40;
-            _progressBar.Visible = true;
+            _isLoading = true;
 
-            if (!string.IsNullOrEmpty(e.Uri) && !e.Uri.StartsWith("data:text/html"))
+            if (!string.IsNullOrEmpty(e.Uri))
             {
-                _topLevelUri = e.Uri;
-                CurrentUrl = e.Uri;
-                if (UrlChanged != null) UrlChanged(this, CurrentUrl);
+                if (!e.Uri.StartsWith("data:text/html") && !e.Uri.StartsWith("about:"))
+                {
+                    _isHome = false;
+                }
+
+                if (!e.Uri.StartsWith("data:text/html"))
+                {
+                    _topLevelUri = e.Uri;
+                    CurrentUrl = e.Uri;
+                    if (UrlChanged != null) UrlChanged(this, CurrentUrl);
+                }
             }
             if (StateChanged != null) StateChanged(this);
         }
 
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
-            _progressBar.Visible = false;
-            _progressBar.Value = 0;
+            _isLoading = false;
 
             if (!e.IsSuccess && StatusTextChanged != null)
             {
@@ -322,11 +348,8 @@ namespace SimpleBrowser
             }
 
             string shortTitle = title;
-            if (shortTitle.Length > 20)
-            {
-                shortTitle = shortTitle.Substring(0, 18) + "..";
-            }
             Text = shortTitle;
+            DisplayTitle = shortTitle;
 
             if (TitleChanged != null) TitleChanged(this, title);
             if (StateChanged != null) StateChanged(this);
