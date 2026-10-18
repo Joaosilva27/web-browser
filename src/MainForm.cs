@@ -31,6 +31,7 @@ namespace SimpleBrowser
         private readonly BookmarkManager _bookmarkManager;
         private readonly HistoryManager _historyManager;
         private bool _chromeReady;
+        private Timer _shieldsTimer;
 
         public MainForm()
         {
@@ -88,6 +89,12 @@ namespace SimpleBrowser
                     e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
                 }
             };
+
+            // Keep the Shields pill counter live as requests are blocked in the background.
+            _shieldsTimer = new Timer();
+            _shieldsTimer.Interval = 2000;
+            _shieldsTimer.Tick += delegate { SyncShields(); };
+            _shieldsTimer.Start();
         }
 
         private async void InitializeChrome()

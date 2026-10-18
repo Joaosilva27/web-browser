@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Text;
 using System.Windows.Forms;
 
 namespace SimpleBrowser
@@ -10,7 +12,7 @@ namespace SimpleBrowser
         {
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            Size = new Size(330, 380);
+            Size = new Size(330, 430);
             BackColor = Color.FromArgb(24, 25, 36);
             ForeColor = Color.White;
             ShowInTaskbar = false;
@@ -90,13 +92,14 @@ namespace SimpleBrowser
             statsBox.Text = "Protection Summary";
             statsBox.ForeColor = Color.FromArgb(160, 165, 180);
             statsBox.Dock = DockStyle.Top;
-            statsBox.Height = 150;
+            statsBox.Height = 200;
             statsBox.Font = new Font("Segoe UI", 8.5F);
 
-            statsBox.Controls.Add(CreateStatRow("🚫 Trackers & ads blocked", "14", 28));
-            statsBox.Controls.Add(CreateStatRow("🔒 HTTPS Upgrade", "Active", 58));
-            statsBox.Controls.Add(CreateStatRow("🛡️ Fingerprinting protection", "Strict", 88));
-            statsBox.Controls.Add(CreateStatRow("⚡ Scripts blocked", "Safe Mode", 118));
+            statsBox.Controls.Add(CreateStatRow("🚫 Trackers & ads blocked", AdBlocker.BlockedCount.ToString(), 28));
+            statsBox.Controls.Add(CreateStatRow("📋 Filter rules loaded", AdBlocker.RuleCount.ToString(), 58));
+            statsBox.Controls.Add(CreateStatRow("🔒 HTTPS Upgrade", "Active", 88));
+            statsBox.Controls.Add(CreateStatRow("🛡️ Fingerprinting protection", "Strict", 118));
+            statsBox.Controls.Add(CreateBlockedHostsList());
 
             var doneBtn = new Button();
             doneBtn.Text = "Done";
@@ -149,6 +152,44 @@ namespace SimpleBrowser
             p.Controls.Add(v);
             p.Controls.Add(l);
             return p;
+        }
+
+        private Label CreateBlockedHostsList()
+        {
+            List<KeyValuePair<string, int>> ranked = new List<KeyValuePair<string, int>>(AdBlocker.GetBlockedByHost());
+            ranked.Sort(delegate (KeyValuePair<string, int> a, KeyValuePair<string, int> b)
+            {
+                return b.Value.CompareTo(a.Value);
+            });
+
+            StringBuilder sb = new StringBuilder();
+            if (ranked.Count == 0)
+            {
+                sb.Append("Nothing blocked yet this session.");
+            }
+            else
+            {
+                sb.Append("Most blocked:");
+                int shown = ranked.Count < 4 ? ranked.Count : 4;
+                for (int i = 0; i < shown; i++)
+                {
+                    string host = ranked[i].Key;
+                    if (host.Length > 27)
+                    {
+                        host = host.Substring(0, 25) + "..";
+                    }
+                    sb.Append(Environment.NewLine).Append("• ").Append(host)
+                      .Append("  (").Append(ranked[i].Value).Append(")");
+                }
+            }
+
+            Label label = new Label();
+            label.Location = new Point(12, 148);
+            label.Size = new Size(272, 46);
+            label.Font = new Font("Segoe UI", 8F);
+            label.ForeColor = Color.FromArgb(160, 165, 180);
+            label.Text = sb.ToString();
+            return label;
         }
 
         protected override void OnDeactivate(EventArgs e)

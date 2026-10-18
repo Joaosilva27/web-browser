@@ -14,6 +14,7 @@ namespace SimpleBrowser
         private WebView2 _webView;
         private ProgressBar _progressBar;
         private string _pendingUrl;
+        private string _topLevelUri;
         private bool _isInitialized;
 
         public event Action<BrowserTab, string> UrlChanged;
@@ -65,16 +66,10 @@ namespace SimpleBrowser
                 _isInitialized = true;
 
                 // Hook up AdBlocker & Brave Shields
+                AdBlocker.Initialize();
                 await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AdBlocker.GetAdBlockInjectionScript());
                 _webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
-                _webView.CoreWebView2.WebResourceRequested += (s, args) =>
-                {
-                    if (AdBlocker.ShouldBlock(args.Request.Uri))
-                    {
-                        var response = _webView.CoreWebView2.Environment.CreateWebResourceResponse(null, 403, "Blocked by Brave Shields", "");
-                        args.Response = response;
-                    }
-                };
+                _webView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
 
                 _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
                 _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
@@ -99,6 +94,7 @@ namespace SimpleBrowser
         public void LoadHomePage()
         {
             CurrentUrl = "about:home";
+            _topLevelUri = null;
             Text = "New Tab";
 
             if (_isInitialized && _webView.CoreWebView2 != null)
@@ -150,6 +146,7 @@ namespace SimpleBrowser
             }
 
             CurrentUrl = destination;
+            _topLevelUri = destination;
 
             if (!_isInitialized || _webView.CoreWebView2 == null)
             {
@@ -217,6 +214,65 @@ namespace SimpleBrowser
             return "";
         }
 
+        private void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs args)
+        {
+            try
+            {
+                string uri = args.Request.Uri;
+
+                // Never cancel the page the user asked for, or same-site frames: blocking the
+                // main document would leave an error page instead of the site.
+                if (!string.IsNullOrEmpty(_topLevelUri))
+                {
+                    if (string.Equals(uri, _topLevelUri, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    if (args.ResourceContext == CoreWebView2WebResourceContext.Document)
+                    {
+                        Uri top;
+                        Uri request;
+                        if (Uri.TryCreate(_topLevelUri, UriKind.Absolute, out top) &&
+                            Uri.TryCreate(uri, UriKind.Absolute, out request) &&
+                            string.Equals(request.Host, top.Host, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                if (AdBlocker.ShouldBlock(uri, _topLevelUri, MapResourceType(args.ResourceContext)))
+                {
+                    args.Response = _webView.CoreWebView2.Environment.CreateWebResourceResponse(
+                        null, 403, "Blocked by Aura Shields", "");
+                }
+            }
+            catch
+            {
+                // A filter failure must never take down the page load.
+            }
+        }
+
+        private static string MapResourceType(CoreWebView2WebResourceContext context)
+        {
+            switch (context)
+            {
+                case CoreWebView2WebResourceContext.Document: return "document";
+                case CoreWebView2WebResourceContext.Script: return "script";
+                case CoreWebView2WebResourceContext.Stylesheet: return "stylesheet";
+                case CoreWebView2WebResourceContext.Image: return "image";
+                case CoreWebView2WebResourceContext.Media: return "media";
+                case CoreWebView2WebResourceContext.Font: return "font";
+                case CoreWebView2WebResourceContext.XmlHttpRequest: return "xmlhttprequest";
+                case CoreWebView2WebResourceContext.Fetch: return "xmlhttprequest";
+                case CoreWebView2WebResourceContext.Websocket: return "websocket";
+                case CoreWebView2WebResourceContext.Ping: return "ping";
+                case CoreWebView2WebResourceContext.Manifest: return "other";
+                default: return "other";
+            }
+        }
+
         private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
             _progressBar.Value = 40;
@@ -224,6 +280,7 @@ namespace SimpleBrowser
 
             if (!string.IsNullOrEmpty(e.Uri) && !e.Uri.StartsWith("data:text/html"))
             {
+                _topLevelUri = e.Uri;
                 CurrentUrl = e.Uri;
                 if (UrlChanged != null) UrlChanged(this, CurrentUrl);
             }
