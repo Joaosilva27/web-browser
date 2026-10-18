@@ -599,7 +599,14 @@ namespace SimpleBrowser
                 var entry = new BarEntry();
                 entry.Title = bookmark.Title;
                 entry.Url = bookmark.Url;
-                entry.Icon = bookmark.Icon;
+
+                // A bookmark added from a tab keeps the icon that page handed us.
+                // Imported ones have none, so ask the favicon service for the
+                // site's real icon instead of drawing a letter tile.
+                entry.Icon = string.IsNullOrEmpty(bookmark.Icon)
+                    ? FavoritesStore.ServiceIconUrl(bookmark.Url)
+                    : bookmark.Icon;
+
                 entries.Add(entry);
             }
 

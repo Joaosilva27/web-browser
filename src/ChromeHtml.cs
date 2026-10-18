@@ -899,17 +899,28 @@ namespace SimpleBrowser
 
         if (item.icon) {
             var img = document.createElement('img');
-            img.src = item.icon;
             img.alt = '';
+            img.addEventListener('error', function () {
+                // Nothing came back — the network is down or the service has no
+                // icon for the host. Draw the letter tile instead of an empty box.
+                letterTile(fav, item);
+            });
+            img.src = item.icon;
             fav.classList.add('plain');
             fav.appendChild(img);
             return fav;
         }
 
+        letterTile(fav, item);
+        return fav;
+    }
+
+    function letterTile(fav, item) {
         var label = hostOf(item.url) || item.title || 'A';
+        fav.classList.remove('plain');
+        fav.innerHTML = '';
         fav.style.background = colorFor(label);
         fav.textContent = (label.charAt(0) || 'A').toUpperCase();
-        return fav;
     }
 
     function barAnchor(el) {

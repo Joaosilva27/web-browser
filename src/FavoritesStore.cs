@@ -121,7 +121,17 @@ namespace SimpleBrowser
             if (favorite == null) return null;
             if (!string.IsNullOrEmpty(favorite.Icon)) return favorite.Icon;
 
-            string host = HostOf(favorite.Url);
+            return ServiceIconUrl(favorite.Url);
+        }
+
+        /// <summary>
+        /// The favicon service address for a page. The start-page tiles and the
+        /// bookmarks bar both use it so a site shows its real icon even when it
+        /// has never been opened here.
+        /// </summary>
+        public static string ServiceIconUrl(string url)
+        {
+            string host = HostOf(url);
             if (string.IsNullOrEmpty(host)) return null;
 
             if (host.IndexOf("mail.google.com", StringComparison.OrdinalIgnoreCase) >= 0 ||
