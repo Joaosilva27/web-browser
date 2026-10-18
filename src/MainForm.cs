@@ -28,6 +28,42 @@ namespace SimpleBrowser
         [DllImport("user32.dll")]
         private static extern short GetKeyState(int nVirtKey);
 
+        // A ContextMenuStrip normally closes itself when you click outside it, but
+        // the WebView2 (Chromium) child windows swallow those clicks. Watch the
+        // mouse globally while the menu is open so it dismisses like a real menu.
+        private const int WH_MOUSE_LL = 14;
+        private const int WM_LBUTTONDOWN = 0x0201;
+        private const int WM_RBUTTONDOWN = 0x0204;
+        private const int WM_MBUTTONDOWN = 0x0207;
+
+        private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MouseHookInfo
+        {
+            public NativePoint Pt;
+            public uint MouseData;
+            public uint Flags;
+            public uint Time;
+            public IntPtr ExtraInfo;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc callback, IntPtr hMod, uint threadId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hook);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr CallNextHookEx(IntPtr hook, int nCode, IntPtr wParam, IntPtr lParam);
+
         private WebView2 _chromeWebView;
         private Panel _contentPanel;
         private TabControl _tabControl;
@@ -36,6 +72,12 @@ namespace SimpleBrowser
         private readonly HistoryManager _historyManager;
         private bool _chromeReady;
         private Timer _shieldsTimer;
+
+        private ContextMenuStrip _openMenu;
+        private IntPtr _menuMouseHook;
+        private LowLevelMouseProc _menuMouseHookProc;
+        private bool _menuDismissedByButton;
+        private DateTime _menuDismissedAtUtc = DateTime.MinValue;
 
         public MainForm()
         {
@@ -633,8 +675,128 @@ namespace SimpleBrowser
             }
         }
 
+        /// <summary>
+        /// Screen rectangle of the chrome's ⋯ button, used to tell a normal
+        /// outside click apart from a click that toggles the menu shut.
+        /// </summary>
+        private Rectangle MenuButtonScreenRect()
+        {
+            Rectangle local = new Rectangle(
+                Width - Dpi.Px(44),
+                Dpi.Px(44),
+                Dpi.Px(40),
+                Dpi.Px(36));
+            return RectangleToScreen(local);
+        }
+
+        private void InstallMenuMouseHook()
+        {
+            if (_menuMouseHook != IntPtr.Zero) return;
+            _menuMouseHookProc = MenuMouseHookProc;
+            _menuMouseHook = SetWindowsHookEx(WH_MOUSE_LL, _menuMouseHookProc, IntPtr.Zero, 0);
+        }
+
+        private void RemoveMenuMouseHook()
+        {
+            if (_menuMouseHook == IntPtr.Zero) return;
+
+            IntPtr hook = _menuMouseHook;
+            _menuMouseHook = IntPtr.Zero;
+
+            // Unhooking from inside the hook callback can deadlock, so defer it.
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    try { UnhookWindowsHookEx(hook); }
+                    catch { }
+                });
+            }
+            catch
+            {
+                try { UnhookWindowsHookEx(hook); }
+                catch { }
+            }
+        }
+
+        /// <summary>
+        /// True when the point is inside the menu or any of its open submenus.
+        /// Nested dropdowns are separate windows, so their bounds must be checked
+        /// too, otherwise clicking a submenu item would be treated as "outside".
+        /// </summary>
+        private static bool IsPointInsideMenu(ToolStripDropDown menu, Point screenPoint)
+        {
+            if (menu == null || !menu.Visible) return false;
+            if (menu.Bounds.Contains(screenPoint)) return true;
+
+            foreach (ToolStripItem item in menu.Items)
+            {
+                var menuItem = item as ToolStripMenuItem;
+                if (menuItem != null && menuItem.HasDropDownItems && menuItem.DropDown.Visible &&
+                    IsPointInsideMenu(menuItem.DropDown, screenPoint))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private IntPtr MenuMouseHookProc(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && _openMenu != null)
+            {
+                int message = wParam.ToInt32();
+                if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN)
+                {
+                    var info = (MouseHookInfo)Marshal.PtrToStructure(lParam, typeof(MouseHookInfo));
+                    var point = new Point(info.Pt.X, info.Pt.Y);
+
+                    if (!IsPointInsideMenu(_openMenu, point))
+                    {
+                        // If this press was on the ⋯ button, the chrome will also
+                        // report a click; remember that so we don't reopen there.
+                        _menuDismissedByButton = MenuButtonScreenRect().Contains(point);
+                        _menuDismissedAtUtc = DateTime.UtcNow;
+                        CloseOpenMenu();
+                    }
+                }
+            }
+
+            return CallNextHookEx(_menuMouseHook, nCode, wParam, lParam);
+        }
+
+        private void CloseOpenMenu()
+        {
+            var menu = _openMenu;
+            _openMenu = null;
+            RemoveMenuMouseHook();
+
+            if (menu != null)
+            {
+                try { menu.Close(ToolStripDropDownCloseReason.AppClicked); }
+                catch { }
+            }
+        }
+
         private void ShowBraveMenu()
         {
+            // Clicking ⋯ while its own menu is open closes it.
+            if (_openMenu != null)
+            {
+                _menuDismissedByButton = true;
+                _menuDismissedAtUtc = DateTime.UtcNow;
+                CloseOpenMenu();
+                return;
+            }
+
+            // A press on ⋯ that dismissed the menu also counts as a click, which
+            // arrives here right after; ignore it so the menu stays closed.
+            bool justDismissed = _menuDismissedByButton &&
+                (DateTime.UtcNow - _menuDismissedAtUtc).TotalMilliseconds < 500;
+            _menuDismissedByButton = false;
+            if (justDismissed) return;
+
             var menu = new ContextMenuStrip();
             menu.BackColor = Theme.CardBackground;
             menu.ForeColor = Theme.TextPrimary;
@@ -695,6 +857,14 @@ namespace SimpleBrowser
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(quitItem);
 
+            menu.Closed += delegate
+            {
+                if (ReferenceEquals(_openMenu, menu)) _openMenu = null;
+                RemoveMenuMouseHook();
+            };
+
+            _openMenu = menu;
+            InstallMenuMouseHook();
             menu.Show(PointToScreen(new Point(Width - Dpi.Px(208), Dpi.Px(ChromeHtml.ChromeHeight + 4))));
         }
 
