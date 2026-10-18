@@ -12,7 +12,8 @@ namespace SimpleBrowser
         {
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            Size = new Size(344, 468);
+            AutoScaleMode = AutoScaleMode.None;
+            Size = new Size(Dpi.Px(344), Dpi.Px(468));
             BackColor = Theme.CardBackground;
             ForeColor = Theme.TextPrimary;
             ShowInTaskbar = false;
@@ -24,7 +25,7 @@ namespace SimpleBrowser
             title.Font = new Font("Segoe UI Semibold", 12.5F);
             title.ForeColor = Theme.TextPrimary;
             title.AutoSize = true;
-            title.Location = new Point(22, 17);
+            title.Location = new Point(Dpi.Px(22), Dpi.Px(17));
 
             var host = new Label();
             host.Text = SiteLabel(currentSite);
@@ -32,16 +33,16 @@ namespace SimpleBrowser
             host.ForeColor = Theme.TextSecondary;
             host.AutoEllipsis = true;
             host.AutoSize = false;
-            host.Size = new Size(268, 18);
-            host.Location = new Point(23, 42);
+            host.Size = new Size(Dpi.Px(268), Dpi.Px(18));
+            host.Location = new Point(Dpi.Px(23), Dpi.Px(42));
 
             var close = new Label();
             close.Text = "\u2715";
             close.Font = new Font("Segoe UI", 9.5F);
             close.ForeColor = Theme.TextTertiary;
             close.TextAlign = ContentAlignment.MiddleCenter;
-            close.Size = new Size(26, 26);
-            close.Location = new Point(302, 15);
+            close.Size = new Size(Dpi.Px(26), Dpi.Px(26));
+            close.Location = new Point(Dpi.Px(302), Dpi.Px(15));
             close.Cursor = Cursors.Hand;
             close.Click += delegate { Close(); };
 
@@ -50,18 +51,19 @@ namespace SimpleBrowser
             count.Font = new Font("Segoe UI", 30F, FontStyle.Regular);
             count.ForeColor = Theme.AccentOrange;
             count.AutoSize = true;
-            count.Location = new Point(19, 68);
+            count.Location = new Point(Dpi.Px(19), Dpi.Px(68));
 
             var caption = new Label();
             caption.Text = "trackers & ads blocked this session";
+            caption.UseMnemonic = false;
             caption.Font = new Font("Segoe UI", 8.75F);
             caption.ForeColor = Theme.TextSecondary;
             caption.AutoSize = true;
-            caption.Location = new Point(23, 120);
+            caption.Location = new Point(Dpi.Px(23), Dpi.Px(120));
 
             var card = new Panel();
-            card.Location = new Point(16, 150);
-            card.Size = new Size(312, 118);
+            card.Location = new Point(Dpi.Px(16), Dpi.Px(150));
+            card.Size = new Size(Dpi.Px(312), Dpi.Px(118));
             card.BackColor = Theme.IsDark
                 ? Color.FromArgb(52, 52, 56)
                 : Color.FromArgb(245, 245, 247);
@@ -75,21 +77,21 @@ namespace SimpleBrowser
             listTitle.Font = new Font("Segoe UI", 7.75F, FontStyle.Bold);
             listTitle.ForeColor = Theme.TextTertiary;
             listTitle.AutoSize = true;
-            listTitle.Location = new Point(22, 287);
+            listTitle.Location = new Point(Dpi.Px(22), Dpi.Px(287));
 
             var list = new Label();
             list.Text = BuildBlockedList();
             list.Font = new Font("Segoe UI", 8.75F);
             list.ForeColor = Theme.TextSecondary;
             list.AutoSize = false;
-            list.Size = new Size(300, 82);
-            list.Location = new Point(22, 308);
+            list.Size = new Size(Dpi.Px(300), Dpi.Px(82));
+            list.Location = new Point(Dpi.Px(22), Dpi.Px(308));
 
             var done = new AuraButton();
             done.Text = "Done";
-            done.Size = new Size(312, 38);
-            done.Location = new Point(16, 410);
-            done.Radius = 9;
+            done.Size = new Size(Dpi.Px(312), Dpi.Px(38));
+            done.Location = new Point(Dpi.Px(16), Dpi.Px(410));
+            done.Radius = Dpi.Px(9);
             done.BackColor = Theme.AccentOrange;
             done.Click += delegate { Close(); };
 
@@ -109,7 +111,7 @@ namespace SimpleBrowser
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            Region = Theme.RoundedRegion(ClientRectangle, 14);
+            Region = Theme.RoundedRegion(ClientRectangle, Dpi.Px(14));
         }
 
         protected override CreateParams CreateParams
@@ -139,8 +141,8 @@ namespace SimpleBrowser
         private Panel CreateRow(string label, string value, int top)
         {
             var row = new Panel();
-            row.Location = new Point(14, top);
-            row.Size = new Size(284, 24);
+            row.Location = new Point(Dpi.Px(14), Dpi.Px(top));
+            row.Size = new Size(Dpi.Px(284), Dpi.Px(24));
 
             var name = new Label();
             name.Text = label;
@@ -152,7 +154,7 @@ namespace SimpleBrowser
             var val = new Label();
             val.Text = value;
             val.Dock = DockStyle.Right;
-            val.Width = 96;
+            val.Width = Dpi.Px(96);
             val.TextAlign = ContentAlignment.MiddleRight;
             val.ForeColor = Theme.TextPrimary;
             val.Font = new Font("Segoe UI", 8.75F, FontStyle.Bold);

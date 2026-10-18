@@ -13,8 +13,9 @@ namespace SimpleBrowser
         public SourceViewerForm(string url, string htmlSource)
         {
             Text = "Page Source";
-            Size = new Size(900, 660);
-            MinimumSize = new Size(600, 400);
+            AutoScaleMode = AutoScaleMode.None;
+            Size = new Size(Dpi.Px(900), Dpi.Px(660));
+            MinimumSize = new Size(Dpi.Px(600), Dpi.Px(400));
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Theme.ContentBackground;
             ForeColor = Theme.TextPrimary;
@@ -22,7 +23,8 @@ namespace SimpleBrowser
 
             var topPanel = new Panel();
             topPanel.Dock = DockStyle.Top;
-            topPanel.Height = 60;
+            topPanel.Height = Dpi.Px(60);
+            topPanel.Width = ClientSize.Width;
             topPanel.BackColor = Theme.CardBackground;
             topPanel.Paint += delegate (object s, PaintEventArgs e)
             {
@@ -38,8 +40,8 @@ namespace SimpleBrowser
             _infoLabel.ForeColor = Theme.TextPrimary;
             _infoLabel.AutoEllipsis = true;
             _infoLabel.AutoSize = false;
-            _infoLabel.Size = new Size(Width - 180, 22);
-            _infoLabel.Location = new Point(20, 11);
+            _infoLabel.Size = new Size(topPanel.Width - Dpi.Px(180), Dpi.Px(22));
+            _infoLabel.Location = new Point(Dpi.Px(20), Dpi.Px(11));
             _infoLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             var subtitle = new Label();
@@ -47,15 +49,15 @@ namespace SimpleBrowser
             subtitle.Font = new Font("Segoe UI", 8.25F);
             subtitle.ForeColor = Theme.TextTertiary;
             subtitle.AutoSize = true;
-            subtitle.Location = new Point(21, 34);
+            subtitle.Location = new Point(Dpi.Px(21), Dpi.Px(34));
 
             _copyButton = new AuraButton();
             _copyButton.Text = "Copy";
-            _copyButton.Size = new Size(88, 32);
-            _copyButton.Radius = 8;
+            _copyButton.Size = new Size(Dpi.Px(88), Dpi.Px(32));
+            _copyButton.Radius = Dpi.Px(8);
             _copyButton.BackColor = Theme.AccentBlue;
             _copyButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _copyButton.Location = new Point(Width - 108, 14);
+            _copyButton.Location = new Point(topPanel.Width - Dpi.Px(108), Dpi.Px(14));
             _copyButton.Click += delegate
             {
                 if (!string.IsNullOrEmpty(_textBox.Text))

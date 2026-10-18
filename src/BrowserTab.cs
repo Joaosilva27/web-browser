@@ -62,6 +62,11 @@ namespace SimpleBrowser
 
                 _isInitialized = true;
 
+                // Pages should follow Aura's light/dark choice, not the OS.
+                _webView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
+                    ? CoreWebView2PreferredColorScheme.Dark
+                    : CoreWebView2PreferredColorScheme.Light;
+
                 // Hook up AdBlocker & Brave Shields
                 AdBlocker.Initialize();
                 await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AdBlocker.GetAdBlockInjectionScript());
@@ -116,6 +121,13 @@ namespace SimpleBrowser
             if (_webView == null) return;
 
             _webView.DefaultBackgroundColor = Theme.ContentBackground;
+
+            if (_isInitialized && _webView.CoreWebView2 != null)
+            {
+                _webView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
+                    ? CoreWebView2PreferredColorScheme.Dark
+                    : CoreWebView2PreferredColorScheme.Light;
+            }
 
             if (_isInitialized && _webView.CoreWebView2 != null && _isHome)
             {

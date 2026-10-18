@@ -24,8 +24,9 @@ namespace SimpleBrowser
             _historyManager = historyManager;
 
             Text = "History";
-            Size = new Size(840, 560);
-            MinimumSize = new Size(660, 420);
+            AutoScaleMode = AutoScaleMode.None;
+            Size = new Size(Dpi.Px(840), Dpi.Px(560));
+            MinimumSize = new Size(Dpi.Px(660), Dpi.Px(420));
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Theme.ContentBackground;
             ForeColor = Theme.TextPrimary;
@@ -33,7 +34,8 @@ namespace SimpleBrowser
 
             var topPanel = new Panel();
             topPanel.Dock = DockStyle.Top;
-            topPanel.Height = 68;
+            topPanel.Height = Dpi.Px(68);
+            topPanel.Width = ClientSize.Width;
             topPanel.BackColor = Theme.CardBackground;
             topPanel.Paint += delegate (object s, PaintEventArgs e)
             {
@@ -48,15 +50,15 @@ namespace SimpleBrowser
             title.Font = new Font("Segoe UI Semibold", 13F);
             title.ForeColor = Theme.TextPrimary;
             title.AutoSize = true;
-            title.Location = new Point(20, 16);
+            title.Location = new Point(Dpi.Px(20), Dpi.Px(16));
 
             var searchWrap = new Panel();
-            searchWrap.Location = new Point(120, 17);
-            searchWrap.Size = new Size(320, 32);
+            searchWrap.Location = new Point(Dpi.Px(120), Dpi.Px(17));
+            searchWrap.Size = new Size(Dpi.Px(320), Dpi.Px(32));
             searchWrap.BackColor = Theme.IsDark
                 ? Color.FromArgb(56, 56, 60)
                 : Color.FromArgb(244, 244, 246);
-            searchWrap.Padding = new Padding(10, 7, 10, 7);
+            searchWrap.Padding = new Padding(Dpi.Px(10), Dpi.Px(7), Dpi.Px(10), Dpi.Px(7));
 
             _searchBox = new TextBox();
             _searchBox.BorderStyle = BorderStyle.None;
@@ -72,27 +74,27 @@ namespace SimpleBrowser
             _countLabel.Font = new Font("Segoe UI", 8.25F);
             _countLabel.ForeColor = Theme.TextTertiary;
             _countLabel.AutoSize = true;
-            _countLabel.Location = new Point(122, 52);
+            _countLabel.Location = new Point(Dpi.Px(122), Dpi.Px(52));
 
             var openBtn = new AuraButton();
             openBtn.Text = "Open";
-            openBtn.Size = new Size(96, 32);
-            openBtn.Radius = 8;
+            openBtn.Size = new Size(Dpi.Px(96), Dpi.Px(32));
+            openBtn.Radius = Dpi.Px(8);
             openBtn.BackColor = Theme.AccentBlue;
             openBtn.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            openBtn.Location = new Point(Width - 136, 17);
+            openBtn.Location = new Point(topPanel.Width - Dpi.Px(136), Dpi.Px(17));
             openBtn.Click += delegate { OpenSelected(); };
 
             var clearBtn = new AuraButton();
             clearBtn.Text = "Clear";
-            clearBtn.Size = new Size(88, 32);
-            clearBtn.Radius = 8;
+            clearBtn.Size = new Size(Dpi.Px(88), Dpi.Px(32));
+            clearBtn.Radius = Dpi.Px(8);
             clearBtn.BackColor = Theme.IsDark
                 ? Color.FromArgb(72, 72, 78)
                 : Color.FromArgb(228, 228, 232);
             clearBtn.ForeColor = Theme.TextPrimary;
             clearBtn.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            clearBtn.Location = new Point(Width - 234, 17);
+            clearBtn.Location = new Point(topPanel.Width - Dpi.Px(234), Dpi.Px(17));
             clearBtn.Click += delegate
             {
                 if (MessageBox.Show(
@@ -122,9 +124,9 @@ namespace SimpleBrowser
             _listView.BackColor = Theme.ContentBackground;
             _listView.ForeColor = Theme.TextPrimary;
             _listView.Font = new Font("Segoe UI", 9F);
-            _listView.Columns.Add("Visited", 160);
-            _listView.Columns.Add("Page", 300);
-            _listView.Columns.Add("Address", 360);
+            _listView.Columns.Add("Visited", Dpi.Px(160));
+            _listView.Columns.Add("Page", Dpi.Px(300));
+            _listView.Columns.Add("Address", Dpi.Px(360));
             _listView.DoubleClick += delegate { OpenSelected(); };
 
             Controls.Add(_listView);

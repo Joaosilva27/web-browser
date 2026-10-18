@@ -13,6 +13,7 @@ namespace SimpleBrowser
     {
         // Win32 constants for frameless resizing and dragging
         private const int WM_NCHITTEST = 0x84;
+        private const int WM_DPICHANGED = 0x02E0;
         private const int HTCLIENT = 1;
         private const int HTLEFT = 10;
         private const int HTRIGHT = 11;
@@ -54,8 +55,11 @@ namespace SimpleBrowser
             Text = "Aura";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(1280, 820);
-            MinimumSize = new Size(620, 420);
+            // The process is DPI-aware, so all sizes below are physical pixels.
+            // Design values are given at 96 DPI and scaled explicitly.
+            AutoScaleMode = AutoScaleMode.None;
+            Size = new Size(Dpi.Px(1280), Dpi.Px(820));
+            MinimumSize = new Size(Dpi.Px(620), Dpi.Px(420));
             BackColor = Theme.WindowBackground;
             DoubleBuffered = true;
             SetStyle(ControlStyles.ResizeRedraw, true);
@@ -63,7 +67,7 @@ namespace SimpleBrowser
             // Top chrome WebView2: tab strip + toolbar, rendered as one HTML surface.
             _chromeWebView = new WebView2();
             _chromeWebView.Dock = DockStyle.Top;
-            _chromeWebView.Height = ChromeHtml.ChromeHeight;
+            _chromeWebView.Height = Dpi.Px(ChromeHtml.ChromeHeight);
             _chromeWebView.DefaultBackgroundColor = Theme.ChromeTop;
 
             // Main Content Area
@@ -116,6 +120,10 @@ namespace SimpleBrowser
 
             if (_chromeWebView.CoreWebView2 != null)
             {
+                _chromeWebView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
+                    ? CoreWebView2PreferredColorScheme.Dark
+                    : CoreWebView2PreferredColorScheme.Light;
+
                 _chromeWebView.CoreWebView2.ExecuteScriptAsync(
                     "document.body.className='" + (Theme.IsDark ? "dark" : "light") + "';");
             }
@@ -145,6 +153,9 @@ namespace SimpleBrowser
                 _chromeWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 _chromeWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 _chromeWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                _chromeWebView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
+                    ? CoreWebView2PreferredColorScheme.Dark
+                    : CoreWebView2PreferredColorScheme.Light;
 
                 _chromeWebView.CoreWebView2.WebMessageReceived += OnChromeMessage;
                 _chromeWebView.CoreWebView2.DOMContentLoaded += delegate
@@ -429,7 +440,7 @@ namespace SimpleBrowser
         {
             string url = ActiveTab != null ? ActiveTab.CurrentUrl : "";
             var shield = new BraveShieldsForm(url);
-            shield.Location = new Point(Math.Max(10, Right - 356), Top + ChromeHtml.ChromeHeight + 6);
+            shield.Location = new Point(Math.Max(Dpi.Px(10), Right - Dpi.Px(356)), Top + Dpi.Px(ChromeHtml.ChromeHeight + 6));
             shield.Show(this);
         }
 
@@ -468,10 +479,26 @@ namespace SimpleBrowser
             if (w <= 0 || h <= 0) return;
 
             // A TabControl insets its pages by the system-drawn border and tab
-            // header (4px left, 5px top, 4px right/bottom with our 1px header).
-            // Oversize and lift it so that inset lands outside the panel and the
-            // page meets the chrome with no system-coloured frame.
-            _tabControl.Bounds = new Rectangle(-4, -5, w + 8, h + 9);
+            // header. Measure that inset at the current DPI instead of assuming
+            // 96-DPI pixels, then oversize and lift the control so the inset
+            // lands outside the panel and the page meets the chrome with no
+            // system-coloured frame.
+            Rectangle display = _tabControl.DisplayRectangle;
+            int insetLeft = display.Left;
+            int insetTop = display.Top;
+            int insetRight = _tabControl.ClientSize.Width - display.Right;
+            int insetBottom = _tabControl.ClientSize.Height - display.Bottom;
+
+            if (insetLeft < 0) insetLeft = 0;
+            if (insetTop < 0) insetTop = 0;
+            if (insetRight < 0) insetRight = 0;
+            if (insetBottom < 0) insetBottom = 0;
+
+            _tabControl.Bounds = new Rectangle(
+                -insetLeft,
+                -insetTop,
+                w + insetLeft + insetRight,
+                h + insetTop + insetBottom);
         }
 
         private void CycleTab(int delta)
@@ -660,32 +687,66 @@ namespace SimpleBrowser
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(quitItem);
 
-            menu.Show(PointToScreen(new Point(Width - 208, ChromeHtml.ChromeHeight + 4)));
+            menu.Show(PointToScreen(new Point(Width - Dpi.Px(208), Dpi.Px(ChromeHtml.ChromeHeight + 4))));
         }
 
         // Native Resizing
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_DPICHANGED)
+            {
+                base.WndProc(ref m);
+
+                // The window moved to a monitor with a different scale factor.
+                // Re-derive the pixel scale, adopt the rectangle Windows
+                // suggests and re-measure the fixed-size pieces so the chrome
+                // stays exactly 84 CSS pixels tall (and therefore crisp).
+                try
+                {
+                    int newDpi = m.WParam.ToInt32() & 0xFFFF;
+                    if (newDpi > 0) Dpi.Scale = newDpi / 96f;
+
+                    var suggested = (NativeRect)Marshal.PtrToStructure(m.LParam, typeof(NativeRect));
+                    Bounds = new Rectangle(
+                        suggested.Left,
+                        suggested.Top,
+                        suggested.Right - suggested.Left,
+                        suggested.Bottom - suggested.Top);
+
+                    if (_chromeWebView != null)
+                    {
+                        _chromeWebView.Height = Dpi.Px(ChromeHtml.ChromeHeight);
+                    }
+                    LayoutTabs();
+                }
+                catch
+                {
+                    // A failed rescale must not take down the window.
+                }
+                return;
+            }
+
             if (m.Msg == WM_NCHITTEST)
             {
                 base.WndProc(ref m);
                 Point pos = PointToClient(new Point(m.LParam.ToInt32()));
+                int margin = Dpi.Px(BorderResizeMargin);
 
-                if (pos.X <= BorderResizeMargin && pos.Y <= BorderResizeMargin)
+                if (pos.X <= margin && pos.Y <= margin)
                     m.Result = (IntPtr)HTTOPLEFT;
-                else if (pos.X >= ClientSize.Width - BorderResizeMargin && pos.Y <= BorderResizeMargin)
+                else if (pos.X >= ClientSize.Width - margin && pos.Y <= margin)
                     m.Result = (IntPtr)HTTOPRIGHT;
-                else if (pos.X <= BorderResizeMargin && pos.Y >= ClientSize.Height - BorderResizeMargin)
+                else if (pos.X <= margin && pos.Y >= ClientSize.Height - margin)
                     m.Result = (IntPtr)HTBOTTOMLEFT;
-                else if (pos.X >= ClientSize.Width - BorderResizeMargin && pos.Y >= ClientSize.Height - BorderResizeMargin)
+                else if (pos.X >= ClientSize.Width - margin && pos.Y >= ClientSize.Height - margin)
                     m.Result = (IntPtr)HTBOTTOMRIGHT;
-                else if (pos.X <= BorderResizeMargin)
+                else if (pos.X <= margin)
                     m.Result = (IntPtr)HTLEFT;
-                else if (pos.X >= ClientSize.Width - BorderResizeMargin)
+                else if (pos.X >= ClientSize.Width - margin)
                     m.Result = (IntPtr)HTRIGHT;
-                else if (pos.Y <= BorderResizeMargin)
+                else if (pos.Y <= margin)
                     m.Result = (IntPtr)HTTOP;
-                else if (pos.Y >= ClientSize.Height - BorderResizeMargin)
+                else if (pos.Y >= ClientSize.Height - margin)
                     m.Result = (IntPtr)HTBOTTOM;
                 return;
             }
@@ -717,6 +778,15 @@ namespace SimpleBrowser
                 if (int.TryParse(match.Groups[1].Value, out val)) return val;
             }
             return -1;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
         }
     }
 
