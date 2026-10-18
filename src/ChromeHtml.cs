@@ -205,6 +205,32 @@ namespace SimpleBrowser
         box-shadow: var(--tile-shadow);
     }
 
+    .tab-fav img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        border-radius: 3px;
+    }
+
+    .tab-fav.plain {
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .tab-fav.home {
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .tab-fav.home svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: var(--text3);
+        stroke-width: 1.6;
+    }
+
     .tab-title {
         flex: 1 1 auto;
         min-width: 0;
@@ -735,8 +761,19 @@ namespace SimpleBrowser
 
                     var fav = document.createElement('div');
                     fav.className = 'tab-fav';
-                    fav.style.background = colorFor(host);
-                    fav.textContent = (host.charAt(0) || 'A').toUpperCase();
+                    if (info.icon) {
+                        var icon = document.createElement('img');
+                        icon.src = info.icon;
+                        icon.alt = '';
+                        fav.classList.add('plain');
+                        fav.appendChild(icon);
+                    } else if (!url) {
+                        fav.classList.add('home');
+                        fav.innerHTML = '<svg viewBox=""0 0 24 24""><circle cx=""12"" cy=""12"" r=""8""/><path d=""M4 12h16""/><path d=""M12 4c2.2 2.2 3.3 5 3.3 8s-1.1 5.8-3.3 8c-2.2-2.2-3.3-5-3.3-8s1.1-5.8 3.3-8z""/></svg>';
+                    } else {
+                        fav.style.background = colorFor(host);
+                        fav.textContent = (host.charAt(0) || 'A').toUpperCase();
+                    }
 
                     var label = document.createElement('span');
                     label.className = 'tab-title';

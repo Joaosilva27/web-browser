@@ -292,6 +292,7 @@ namespace SimpleBrowser
             tab.UrlChanged += OnTabUrlChanged;
             tab.TitleChanged += OnTabTitleChanged;
             tab.StateChanged += OnTabStateChanged;
+            tab.IconChanged += OnTabIconChanged;
 
             _tabControl.TabPages.Add(tab);
             _tabControl.SelectedTab = tab;
@@ -362,16 +363,18 @@ namespace SimpleBrowser
                 if (string.IsNullOrEmpty(title)) title = "New Tab";
 
                 string url = "";
+                string icon = "";
                 var browserTab = _tabControl.TabPages[i] as BrowserTab;
                 if (browserTab != null)
                 {
                     if (!string.IsNullOrEmpty(browserTab.DisplayTitle)) title = browserTab.DisplayTitle;
                     url = browserTab.CurrentUrl ?? "";
+                    icon = browserTab.FaviconDataUrl ?? "";
                     if (url == "about:home") url = "";
                 }
 
-                tabItems.Add(string.Format("{{\"title\":\"{0}\",\"url\":\"{1}\"}}",
-                    EscapeJs(title), EscapeJs(url)));
+                tabItems.Add(string.Format("{{\"title\":\"{0}\",\"url\":\"{1}\",\"icon\":\"{2}\"}}",
+                    EscapeJs(title), EscapeJs(url), EscapeJs(icon)));
             }
             string json = "[" + string.Join(",", tabItems.ToArray()) + "]";
             int activeIndex = _tabControl.SelectedIndex;
@@ -434,6 +437,11 @@ namespace SimpleBrowser
             {
                 SyncNavState();
             }
+        }
+
+        private void OnTabIconChanged(BrowserTab tab)
+        {
+            SyncTabs();
         }
 
         private void ShowBraveShields()

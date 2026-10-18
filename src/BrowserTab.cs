@@ -22,10 +22,12 @@ namespace SimpleBrowser
         public event Action<BrowserTab, string> TitleChanged;
         public event Action<BrowserTab> StateChanged;
         public event Action<BrowserTab, string> StatusTextChanged;
+        public event Action<BrowserTab> IconChanged;
 
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
         public string DisplayTitle { get; private set; }
+        public string FaviconDataUrl { get; private set; }
         public bool IsLoading { get { return _isLoading; } }
         public bool CanGoBack { get { return _webView != null && _isInitialized && _webView.CanGoBack; } }
         public bool CanGoForward { get { return _webView != null && _isInitialized && _webView.CanGoForward; } }
@@ -77,6 +79,7 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
                 _webView.CoreWebView2.SourceChanged += OnSourceChanged;
                 _webView.CoreWebView2.DocumentTitleChanged += OnDocumentTitleChanged;
+                _webView.CoreWebView2.FaviconChanged += OnFaviconChanged;
 
                 if (!string.IsNullOrEmpty(_pendingUrl))
                 {
@@ -99,6 +102,7 @@ namespace SimpleBrowser
             CurrentUrl = "about:home";
             _topLevelUri = null;
             Text = "New Tab";
+            FaviconDataUrl = null;
 
             if (_isInitialized && _webView.CoreWebView2 != null)
             {
@@ -109,6 +113,7 @@ namespace SimpleBrowser
                 _pendingUrl = "about:home";
             }
 
+            if (IconChanged != null) IconChanged(this);
             if (TitleChanged != null) TitleChanged(this, "New Tab");
             if (UrlChanged != null) UrlChanged(this, "");
             if (StateChanged != null) StateChanged(this);
@@ -349,6 +354,31 @@ namespace SimpleBrowser
                 }
             }
             if (StateChanged != null) StateChanged(this);
+        }
+
+        private async void OnFaviconChanged(object sender, object e)
+        {
+            try
+            {
+                using (var stream = await _webView.CoreWebView2.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png))
+                {
+                    if (stream == null) return;
+
+                    using (var memory = new MemoryStream())
+                    {
+                        stream.CopyTo(memory);
+                        byte[] bytes = memory.ToArray();
+                        if (bytes.Length == 0) return;
+
+                        FaviconDataUrl = "data:image/png;base64," + Convert.ToBase64String(bytes);
+                        if (IconChanged != null) IconChanged(this);
+                    }
+                }
+            }
+            catch
+            {
+                // Sites without a usable icon keep the generated letter badge.
+            }
         }
 
         private void OnDocumentTitleChanged(object sender, object e)

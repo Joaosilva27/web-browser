@@ -28,6 +28,8 @@ namespace SimpleBrowser
         --field-line: rgba(0, 0, 0, 0.06);
         --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.07);
         --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+        --tile-bg: #ffffff;
+        --tile-line: rgba(0, 0, 0, 0.07);
         --hover: rgba(0, 0, 0, 0.045);
         --accent: #007aff;
         --ring: rgba(0, 122, 255, 0.16);
@@ -58,6 +60,8 @@ namespace SimpleBrowser
         --field-line: rgba(255, 255, 255, 0.07);
         --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 26px rgba(0, 0, 0, 0.28);
         --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.40);
+        --tile-bg: #ffffff;
+        --tile-line: rgba(0, 0, 0, 0.12);
         --hover: rgba(255, 255, 255, 0.06);
         --accent: #0a84ff;
         --ring: rgba(10, 132, 255, 0.22);
@@ -195,17 +199,43 @@ namespace SimpleBrowser
     .fav:hover { background: var(--hover); transform: translateY(-2px); }
 
     .tile {
+        position: relative;
         width: 44px;
         height: 44px;
         border-radius: 12px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: var(--tile-bg);
+        border: 1px solid var(--tile-line);
+        box-shadow: var(--tile-shadow);
+    }
+
+    /* Brand-coloured letter badge, shown until (or unless) the real
+       favicon loads. */
+    .tile-letter {
+        position: absolute;
+        inset: 0;
         display: grid;
         place-items: center;
         color: #fff;
         font-size: 18px;
         font-weight: 600;
         letter-spacing: -0.02em;
-        box-shadow: var(--tile-shadow);
     }
+
+    .tile-icon {
+        position: relative;
+        z-index: 1;
+        width: 26px;
+        height: 26px;
+        object-fit: contain;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+    }
+
+    .tile.has-icon .tile-icon { opacity: 1; }
+    .tile.has-icon .tile-letter { display: none; }
 
     .label {
         margin-top: 7px;
@@ -284,35 +314,68 @@ namespace SimpleBrowser
 
         <div class='favorites'>
             <a class='fav' href='https://search.brave.com'>
-                <span class='tile' style='background:#f25a29'>B</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#f25a29'>B</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/search.brave.com.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>Brave Search</span>
             </a>
             <a class='fav' href='https://github.com'>
-                <span class='tile' style='background:#24292f'>G</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#24292f'>G</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/github.com.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>GitHub</span>
             </a>
             <a class='fav' href='https://youtube.com'>
-                <span class='tile' style='background:#ff0033'>Y</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#ff0033'>Y</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/youtube.com.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>YouTube</span>
             </a>
             <a class='fav' href='https://reddit.com'>
-                <span class='tile' style='background:#ff4500'>R</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#ff4500'>R</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/reddit.com.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>Reddit</span>
             </a>
             <a class='fav' href='https://wikipedia.org'>
-                <span class='tile' style='background:#54595d'>W</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#54595d'>W</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/wikipedia.org.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>Wikipedia</span>
             </a>
             <a class='fav' href='https://news.ycombinator.com'>
-                <span class='tile' style='background:#ff6600'>H</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#ff6600'>H</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/news.ycombinator.com.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>Hacker News</span>
             </a>
             <a class='fav' href='https://mail.google.com'>
-                <span class='tile' style='background:#ea4335'>M</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#ea4335'>M</span>
+                    <img class='tile-icon' alt=''
+                         src='https://www.gstatic.com/images/branding/product/2x/gmail_2020q4_48dp.png'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>Gmail</span>
             </a>
             <a class='fav' href='https://x.com'>
-                <span class='tile' style='background:#1d1d1f'>X</span>
+                <span class='tile'>
+                    <span class='tile-letter' style='background:#1d1d1f'>X</span>
+                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/x.com.ico'
+                         onload=""this.parentNode.classList.add('has-icon')"" />
+                </span>
                 <span class='label'>X</span>
             </a>
         </div>
