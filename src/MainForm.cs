@@ -183,14 +183,7 @@ namespace SimpleBrowser
         {
             try
             {
-                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser", "BraveChromeProfile");
-                if (!Directory.Exists(userDataFolder))
-                {
-                    Directory.CreateDirectory(userDataFolder);
-                }
-
-                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-                await _chromeWebView.EnsureCoreWebView2Async(env);
+                await _chromeWebView.EnsureCoreWebView2Async(await BrowserEnvironment.GetAsync());
 
                 _chromeWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 _chromeWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
@@ -335,6 +328,8 @@ namespace SimpleBrowser
             tab.TitleChanged += OnTabTitleChanged;
             tab.StateChanged += OnTabStateChanged;
             tab.IconChanged += OnTabIconChanged;
+            tab.NewWindowRequested += OnTabNewWindowRequested;
+            tab.WindowCloseRequested += OnTabWindowCloseRequested;
 
             _tabControl.TabPages.Add(tab);
             _tabControl.SelectedTab = tab;
@@ -484,6 +479,72 @@ namespace SimpleBrowser
         private void OnTabIconChanged(BrowserTab tab)
         {
             SyncTabs();
+        }
+
+        /// <summary>
+        /// Popups and new windows. Requests with explicit window features — the
+        /// kind OAuth and "Sign in with Google" flows use — become real popup
+        /// windows so they can post back to their opener. Plain target="_blank"
+        /// links open as a new tab, like a normal browser.
+        /// </summary>
+        private async void OnTabNewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            var deferral = e.GetDeferral();
+            try
+            {
+                var features = e.WindowFeatures;
+                bool wantsPopup = (features != null && (features.HasSize || features.HasPosition)) || !e.IsUserInitiated;
+
+                if (wantsPopup)
+                {
+                    int width = features != null && features.HasSize && features.Width > 0
+                        ? Dpi.Px((int)features.Width)
+                        : Dpi.Px(520);
+                    int height = features != null && features.HasSize && features.Height > 0
+                        ? Dpi.Px((int)features.Height)
+                        : Dpi.Px(660);
+
+                    var popup = new PopupWindow();
+                    popup.Size = new Size(Math.Max(Dpi.Px(320), width), Math.Max(Dpi.Px(280), height));
+                    popup.Owner = this;
+                    popup.Show();
+
+                    await popup.View.EnsureCoreWebView2Async(await BrowserEnvironment.GetAsync());
+                    popup.Attach();
+
+                    e.NewWindow = popup.View.CoreWebView2;
+                    e.Handled = true;
+
+                    // WebView2 places the window itself, so recentre once it is done.
+                    var placed = popup;
+                    popup.BeginInvoke((MethodInvoker)delegate { placed.CenterOnOwner(); });
+                }
+                else
+                {
+                    e.Handled = true;
+                    AddNewTab(string.IsNullOrEmpty(e.Uri) ? null : e.Uri);
+                }
+            }
+            catch
+            {
+                // Never leave the click dead: fall back to a plain new tab.
+                try
+                {
+                    e.Handled = true;
+                    AddNewTab(string.IsNullOrEmpty(e.Uri) ? null : e.Uri);
+                }
+                catch { }
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
+        private void OnTabWindowCloseRequested(BrowserTab tab)
+        {
+            int index = _tabControl.TabPages.IndexOf(tab);
+            if (index >= 0) CloseTabAt(index);
         }
 
         private void ShowBraveShields()

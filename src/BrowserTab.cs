@@ -23,6 +23,8 @@ namespace SimpleBrowser
         public event Action<BrowserTab> StateChanged;
         public event Action<BrowserTab, string> StatusTextChanged;
         public event Action<BrowserTab> IconChanged;
+        public event EventHandler<CoreWebView2NewWindowRequestedEventArgs> NewWindowRequested;
+        public event Action<BrowserTab> WindowCloseRequested;
 
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
@@ -53,13 +55,7 @@ namespace SimpleBrowser
         {
             try
             {
-                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser", "WebView2Profile");
-                if (!Directory.Exists(userDataFolder))
-                {
-                    Directory.CreateDirectory(userDataFolder);
-                }
-
-                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                var env = await BrowserEnvironment.GetAsync();
                 await _webView.EnsureCoreWebView2Async(env);
 
                 _isInitialized = true;
@@ -68,6 +64,11 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
                     ? CoreWebView2PreferredColorScheme.Dark
                     : CoreWebView2PreferredColorScheme.Light;
+
+                // Let WebView2 offer to save logins and autofill data. Both live
+                // in the persistent profile, so they survive restarts.
+                _webView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = true;
+                _webView.CoreWebView2.Settings.IsGeneralAutofillEnabled = true;
 
                 // Hook up AdBlocker & Brave Shields
                 AdBlocker.Initialize();
@@ -80,6 +81,8 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.SourceChanged += OnSourceChanged;
                 _webView.CoreWebView2.DocumentTitleChanged += OnDocumentTitleChanged;
                 _webView.CoreWebView2.FaviconChanged += OnFaviconChanged;
+                _webView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
+                _webView.CoreWebView2.WindowCloseRequested += OnWindowCloseRequested;
 
                 if (!string.IsNullOrEmpty(_pendingUrl))
                 {
@@ -354,6 +357,26 @@ namespace SimpleBrowser
                 }
             }
             if (StateChanged != null) StateChanged(this);
+        }
+
+        private void OnNewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            var handler = NewWindowRequested;
+            if (handler != null)
+            {
+                handler(this, e);
+            }
+            else
+            {
+                // Nobody is listening, so keep the click alive ourselves.
+                e.Handled = true;
+                if (!string.IsNullOrEmpty(e.Uri)) Navigate(e.Uri);
+            }
+        }
+
+        private void OnWindowCloseRequested(object sender, object e)
+        {
+            if (WindowCloseRequested != null) WindowCloseRequested(this);
         }
 
         private async void OnFaviconChanged(object sender, object e)
