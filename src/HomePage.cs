@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace SimpleBrowser
 {
@@ -313,71 +314,7 @@ namespace SimpleBrowser
         </form>
 
         <div class='favorites'>
-            <a class='fav' href='https://search.brave.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#f25a29'>B</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/search.brave.com.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>Brave Search</span>
-            </a>
-            <a class='fav' href='https://github.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#24292f'>G</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/github.com.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>GitHub</span>
-            </a>
-            <a class='fav' href='https://youtube.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#ff0033'>Y</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/youtube.com.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>YouTube</span>
-            </a>
-            <a class='fav' href='https://reddit.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#ff4500'>R</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/reddit.com.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>Reddit</span>
-            </a>
-            <a class='fav' href='https://wikipedia.org'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#54595d'>W</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/wikipedia.org.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>Wikipedia</span>
-            </a>
-            <a class='fav' href='https://news.ycombinator.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#ff6600'>H</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/news.ycombinator.com.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>Hacker News</span>
-            </a>
-            <a class='fav' href='https://mail.google.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#ea4335'>M</span>
-                    <img class='tile-icon' alt=''
-                         src='https://www.gstatic.com/images/branding/product/2x/gmail_2020q4_48dp.png'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>Gmail</span>
-            </a>
-            <a class='fav' href='https://x.com'>
-                <span class='tile'>
-                    <span class='tile-letter' style='background:#1d1d1f'>X</span>
-                    <img class='tile-icon' alt='' src='https://icons.duckduckgo.com/ip3/x.com.ico'
-                         onload=""this.parentNode.classList.add('has-icon')"" />
-                </span>
-                <span class='label'>X</span>
-            </a>
+__FAVORITES__
         </div>
     </div>
 
@@ -435,7 +372,64 @@ namespace SimpleBrowser
 
             return html
                 .Replace("__THEME__", dark ? "dark" : "light")
+                .Replace("__FAVORITES__", RenderFavorites())
                 .Replace("__SHIELDS__", shieldsNote);
+        }
+
+        /// <summary>
+        /// Builds the tile strip from the favourites store, so imported top sites
+        /// and anything added later show up here without touching this file.
+        /// </summary>
+        private static string RenderFavorites()
+        {
+            var builder = new StringBuilder();
+
+            foreach (var favorite in FavoritesStore.Current.GetFavorites())
+            {
+                if (favorite == null || string.IsNullOrEmpty(favorite.Url)) continue;
+
+                string color = string.IsNullOrEmpty(favorite.Color) ? "#6e6e73" : favorite.Color;
+                string letter = string.IsNullOrEmpty(favorite.Letter)
+                    ? FavoritesStore.LetterFor(favorite.Title, favorite.Url)
+                    : favorite.Letter;
+                string icon = FavoritesStore.IconFor(favorite);
+
+                builder.Append("            <a class='fav' href='").Append(Attribute(favorite.Url)).Append("'>\r\n");
+                builder.Append("                <span class='tile'>\r\n");
+                builder.Append("                    <span class='tile-letter' style='background:")
+                       .Append(Attribute(color)).Append("'>").Append(Escape(letter)).Append("</span>\r\n");
+
+                if (!string.IsNullOrEmpty(icon))
+                {
+                    builder.Append("                    <img class='tile-icon' alt='' src='")
+                           .Append(Attribute(icon))
+                           .Append("' onload=\"this.parentNode.classList.add('has-icon')\" />\r\n");
+                }
+
+                builder.Append("                </span>\r\n");
+                builder.Append("                <span class='label'>")
+                       .Append(Escape(favorite.Title)).Append("</span>\r\n");
+                builder.Append("            </a>\r\n");
+            }
+
+            return builder.ToString();
+        }
+
+        private static string Escape(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+
+            return text
+                .Replace("&", "&amp;")
+                .Replace("<", "&lt;")
+                .Replace(">", "&gt;")
+                .Replace("\"", "&quot;");
+        }
+
+        private static string Attribute(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            return Escape(text).Replace("'", "&#39;");
         }
     }
 }

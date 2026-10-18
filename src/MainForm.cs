@@ -673,6 +673,7 @@ namespace SimpleBrowser
                     case 0x44: action = "bookmark"; break;                         // Ctrl+D
                     case 0x48: action = "history"; break;                          // Ctrl+H
                     case 0x55: action = "source"; break;                           // Ctrl+U
+                    case 0x4F: if (shift) action = "bookmarks"; break;             // Ctrl+Shift+O
                     case 0x09: action = shift ? "prev_tab" : "next_tab"; break;    // Ctrl+Tab
                 }
             }
@@ -702,6 +703,7 @@ namespace SimpleBrowser
                 case "reload": if (ActiveTab != null) ActiveTab.Reload(); break;
                 case "bookmark": ToggleBookmarkCurrent(); break;
                 case "history": ShowHistory(); break;
+                case "bookmarks": ShowBookmarks(); break;
                 case "source": ShowPageSource(); break;
                 case "back": if (ActiveTab != null) ActiveTab.GoBack(); break;
                 case "forward": if (ActiveTab != null) ActiveTab.GoForward(); break;
@@ -720,6 +722,44 @@ namespace SimpleBrowser
                     {
                         ActiveTab.Navigate(historyForm.SelectedUrl);
                     }
+                }
+            }
+        }
+
+        private void ShowBookmarks()
+        {
+            using (var bookmarksForm = new BookmarksForm(_bookmarkManager))
+            {
+                bookmarksForm.ShowDialog(this);
+
+                if (bookmarksForm.Changed) SyncBookmarked();
+
+                if (!string.IsNullOrEmpty(bookmarksForm.SelectedUrl) && ActiveTab != null)
+                {
+                    ActiveTab.Navigate(bookmarksForm.SelectedUrl);
+                }
+            }
+        }
+
+        private void ShowImport()
+        {
+            using (var importForm = new ImportForm(_bookmarkManager, _historyManager))
+            {
+                importForm.ShowDialog(this);
+
+                if (importForm.FavoritesChanged) RefreshHomeTabs();
+            }
+        }
+
+        /// <summary>Re-renders any tab that is sitting on the start page.</summary>
+        private void RefreshHomeTabs()
+        {
+            foreach (object page in _tabControl.TabPages)
+            {
+                var tab = page as BrowserTab;
+                if (tab != null && tab.CurrentUrl == "about:home")
+                {
+                    tab.LoadHomePage();
                 }
             }
         }
@@ -876,6 +916,9 @@ namespace SimpleBrowser
             var historyItem = new ToolStripMenuItem("History", null, delegate { ShowHistory(); });
             historyItem.ShortcutKeyDisplayString = "Ctrl+H";
 
+            var allBookmarksItem = new ToolStripMenuItem("Show All Bookmarks", null, delegate { ShowBookmarks(); });
+            allBookmarksItem.ShortcutKeyDisplayString = "Ctrl+Shift+O";
+
             var sourceItem = new ToolStripMenuItem("View Page Source", null, delegate { ShowPageSource(); });
             sourceItem.ShortcutKeyDisplayString = "Ctrl+U";
 
@@ -905,15 +948,19 @@ namespace SimpleBrowser
             };
 
             var aboutItem = new ToolStripMenuItem("About Aura", null, delegate { ShowAbout(); });
+            var importItem = new ToolStripMenuItem("Import Browser Data\u2026", null, delegate { ShowImport(); });
             var quitItem = new ToolStripMenuItem("Quit Aura", null, delegate { Close(); });
 
             menu.Items.Add(newTabItem);
             menu.Items.Add(bookmarksItem);
+            menu.Items.Add(allBookmarksItem);
             menu.Items.Add(historyItem);
             menu.Items.Add(sourceItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(shieldItem);
             menu.Items.Add(appearanceItem);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(importItem);
             menu.Items.Add(aboutItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(quitItem);

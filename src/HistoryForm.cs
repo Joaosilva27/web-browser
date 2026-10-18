@@ -13,9 +13,13 @@ namespace SimpleBrowser
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
 
         private readonly HistoryManager _historyManager;
+
         private ListView _listView;
+        private ListView _searchList;
         private TextBox _searchBox;
         private Label _countLabel;
+        private AuraButton _historyTab;
+        private AuraButton _searchTab;
 
         public string SelectedUrl { get; private set; }
 
@@ -25,7 +29,7 @@ namespace SimpleBrowser
 
             Text = "History";
             AutoScaleMode = AutoScaleMode.None;
-            Size = new Size(Dpi.Px(840), Dpi.Px(560));
+            Size = new Size(Dpi.Px(880), Dpi.Px(580));
             MinimumSize = new Size(Dpi.Px(660), Dpi.Px(420));
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Theme.ContentBackground;
@@ -52,9 +56,25 @@ namespace SimpleBrowser
             title.AutoSize = true;
             title.Location = new Point(Dpi.Px(20), Dpi.Px(16));
 
+            // Segmented switch between browsing history and search terms.
+            _historyTab = new AuraButton();
+            _historyTab.Text = "History";
+            _historyTab.Size = new Size(Dpi.Px(90), Dpi.Px(32));
+            _historyTab.Radius = Dpi.Px(8);
+            _historyTab.Location = new Point(Dpi.Px(126), Dpi.Px(17));
+            _historyTab.Click += delegate { ShowTab(true); };
+
+            _searchTab = new AuraButton();
+            _searchTab.Text = "Search history";
+            _searchTab.Size = new Size(Dpi.Px(126), Dpi.Px(32));
+            _searchTab.Radius = Dpi.Px(8);
+            _searchTab.Location = new Point(Dpi.Px(220), Dpi.Px(17));
+            _searchTab.Click += delegate { ShowTab(false); };
+
             var searchWrap = new Panel();
-            searchWrap.Location = new Point(Dpi.Px(120), Dpi.Px(17));
-            searchWrap.Size = new Size(Dpi.Px(320), Dpi.Px(32));
+            searchWrap.Location = new Point(Dpi.Px(362), Dpi.Px(17));
+            searchWrap.Size = new Size(Dpi.Px(220), Dpi.Px(32));
+            searchWrap.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             searchWrap.BackColor = Theme.IsDark
                 ? Color.FromArgb(56, 56, 60)
                 : Color.FromArgb(244, 244, 246);
@@ -74,7 +94,7 @@ namespace SimpleBrowser
             _countLabel.Font = new Font("Segoe UI", 8.25F);
             _countLabel.ForeColor = Theme.TextTertiary;
             _countLabel.AutoSize = true;
-            _countLabel.Location = new Point(Dpi.Px(122), Dpi.Px(52));
+            _countLabel.Location = new Point(Dpi.Px(364), Dpi.Px(52));
 
             var openBtn = new AuraButton();
             openBtn.Text = "Open";
@@ -95,20 +115,11 @@ namespace SimpleBrowser
             clearBtn.ForeColor = Theme.TextPrimary;
             clearBtn.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             clearBtn.Location = new Point(topPanel.Width - Dpi.Px(234), Dpi.Px(17));
-            clearBtn.Click += delegate
-            {
-                if (MessageBox.Show(
-                        "Clear all browsing history?",
-                        "Clear History",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question) == DialogResult.Yes)
-                {
-                    _historyManager.ClearHistory();
-                    PopulateList();
-                }
-            };
+            clearBtn.Click += delegate { ClearActive(); };
 
             topPanel.Controls.Add(title);
+            topPanel.Controls.Add(_historyTab);
+            topPanel.Controls.Add(_searchTab);
             topPanel.Controls.Add(searchWrap);
             topPanel.Controls.Add(_countLabel);
             topPanel.Controls.Add(openBtn);
@@ -126,55 +137,151 @@ namespace SimpleBrowser
             _listView.Font = new Font("Segoe UI", 9F);
             _listView.Columns.Add("Visited", Dpi.Px(160));
             _listView.Columns.Add("Page", Dpi.Px(300));
-            _listView.Columns.Add("Address", Dpi.Px(360));
+            _listView.Columns.Add("Address", Dpi.Px(380));
             _listView.DoubleClick += delegate { OpenSelected(); };
 
+            _searchList = new ListView();
+            _searchList.Dock = DockStyle.Fill;
+            _searchList.View = View.Details;
+            _searchList.FullRowSelect = true;
+            _searchList.GridLines = false;
+            _searchList.HideSelection = false;
+            _searchList.BorderStyle = BorderStyle.None;
+            _searchList.BackColor = Theme.ContentBackground;
+            _searchList.ForeColor = Theme.TextPrimary;
+            _searchList.Font = new Font("Segoe UI", 9F);
+            _searchList.Columns.Add("Searched", Dpi.Px(160));
+            _searchList.Columns.Add("Term", Dpi.Px(300));
+            _searchList.Columns.Add("Result", Dpi.Px(380));
+            _searchList.DoubleClick += delegate { OpenSelected(); };
+
+            Controls.Add(_searchList);
             Controls.Add(_listView);
             Controls.Add(topPanel);
 
-            PopulateList();
+            ShowTab(true);
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            SendMessage(_searchBox.Handle, EM_SETCUEBANNER, (IntPtr)1, "Search history");
+            SendMessage(_searchBox.Handle, EM_SETCUEBANNER, (IntPtr)1, "Search");
+        }
+
+        private bool Searching
+        {
+            get { return _searchList.Visible; }
+        }
+
+        private void ShowTab(bool history)
+        {
+            _listView.Visible = history;
+            _searchList.Visible = !history;
+
+            if (history)
+            {
+                _historyTab.BackColor = Theme.AccentBlue;
+                _historyTab.ForeColor = Color.White;
+                _searchTab.BackColor = Theme.IsDark
+                    ? Color.FromArgb(72, 72, 78)
+                    : Color.FromArgb(228, 228, 232);
+                _searchTab.ForeColor = Theme.TextPrimary;
+            }
+            else
+            {
+                _searchTab.BackColor = Theme.AccentBlue;
+                _searchTab.ForeColor = Color.White;
+                _historyTab.BackColor = Theme.IsDark
+                    ? Color.FromArgb(72, 72, 78)
+                    : Color.FromArgb(228, 228, 232);
+                _historyTab.ForeColor = Theme.TextPrimary;
+            }
+
+            _listView.BringToFront();
+            _searchList.BringToFront();
+            PopulateList();
         }
 
         private void PopulateList()
         {
-            _listView.Items.Clear();
             string filter = _searchBox.Text.Trim().ToLowerInvariant();
+            int count;
 
-            foreach (var item in _historyManager.GetHistory())
+            if (Searching)
             {
-                if (!string.IsNullOrEmpty(filter))
+                _searchList.Items.Clear();
+
+                foreach (var entry in _historyManager.GetSearches())
                 {
-                    bool matchTitle = (item.Title != null && item.Title.ToLowerInvariant().Contains(filter));
-                    bool matchUrl = (item.Url != null && item.Url.ToLowerInvariant().Contains(filter));
-                    if (!matchTitle && !matchUrl) continue;
+                    if (filter.Length > 0)
+                    {
+                        bool matchTerm = entry.Term != null && entry.Term.ToLowerInvariant().Contains(filter);
+                        bool matchUrl = entry.Url != null && entry.Url.ToLowerInvariant().Contains(filter);
+                        if (!matchTerm && !matchUrl) continue;
+                    }
+
+                    var row = new ListViewItem(entry.SearchedAt.ToString("yyyy-MM-dd  HH:mm"));
+                    row.SubItems.Add(entry.Term ?? string.Empty);
+                    row.SubItems.Add(entry.Url ?? string.Empty);
+                    row.Tag = entry.Url;
+                    _searchList.Items.Add(row);
                 }
 
-                var lvi = new ListViewItem(item.VisitedAt.ToString("yyyy-MM-dd  HH:mm"));
-                lvi.SubItems.Add(item.Title ?? string.Empty);
-                lvi.SubItems.Add(item.Url ?? string.Empty);
-                lvi.Tag = item.Url;
-                _listView.Items.Add(lvi);
+                count = _searchList.Items.Count;
+            }
+            else
+            {
+                _listView.Items.Clear();
+
+                foreach (var item in _historyManager.GetHistory())
+                {
+                    if (filter.Length > 0)
+                    {
+                        bool matchTitle = item.Title != null && item.Title.ToLowerInvariant().Contains(filter);
+                        bool matchUrl = item.Url != null && item.Url.ToLowerInvariant().Contains(filter);
+                        if (!matchTitle && !matchUrl) continue;
+                    }
+
+                    var row = new ListViewItem(item.VisitedAt.ToString("yyyy-MM-dd  HH:mm"));
+                    row.SubItems.Add(item.Title ?? string.Empty);
+                    row.SubItems.Add(item.Url ?? string.Empty);
+                    row.Tag = item.Url;
+                    _listView.Items.Add(row);
+                }
+
+                count = _listView.Items.Count;
             }
 
-            _countLabel.Text = _listView.Items.Count == 1
-                ? "1 entry"
-                : _listView.Items.Count + " entries";
+            _countLabel.Text = count == 1 ? "1 entry" : count + " entries";
         }
 
         private void OpenSelected()
         {
-            if (_listView.SelectedItems.Count > 0)
+            var list = Searching ? _searchList : _listView;
+            if (list.SelectedItems.Count == 0) return;
+
+            SelectedUrl = list.SelectedItems[0].Tag as string;
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private void ClearActive()
+        {
+            bool searching = Searching;
+
+            if (MessageBox.Show(
+                    searching ? "Clear your search history?" : "Clear all browsing history?",
+                    searching ? "Clear Search History" : "Clear History",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) != DialogResult.Yes)
             {
-                SelectedUrl = _listView.SelectedItems[0].Tag as string;
-                DialogResult = DialogResult.OK;
-                Close();
+                return;
             }
+
+            if (searching) _historyManager.ClearSearches();
+            else _historyManager.ClearHistory();
+
+            PopulateList();
         }
     }
 }
