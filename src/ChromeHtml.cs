@@ -116,42 +116,50 @@ namespace SimpleBrowser
         display: flex;
         align-items: center;
         gap: 9px;
-        padding: 0 10px 0 13px;
+        padding: 0 0 0 13px;
         -webkit-app-region: drag;
     }
 
-    .traffic {
+    /* ── Window buttons (top right, Windows order) ────────────────────── */
+
+    .wctl {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        align-items: stretch;
         flex: none;
+        align-self: stretch;
+        -webkit-app-region: no-drag;
     }
 
-    .tl {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        border: 0.5px solid rgba(0, 0, 0, 0.16);
+    .wbtn {
+        width: 46px;
         display: grid;
         place-items: center;
-        position: relative;
+        border-radius: 0;
+        transition: background 0.1s ease, color 0.1s ease;
     }
-    body.dark .tl { border-color: rgba(0, 0, 0, 0.38); }
-    .tl.red { background: #ff5f57; }
-    .tl.yellow { background: #febc2e; }
-    .tl.green { background: #28c840; }
-    .tl svg {
-        width: 7px;
-        height: 7px;
-        opacity: 0;
-        transition: opacity 0.12s ease;
+    .wbtn svg {
+        width: 10px;
+        height: 10px;
         fill: none;
-        stroke: rgba(0, 0, 0, 0.55);
-        stroke-width: 1.5;
+        stroke: currentColor;
+        stroke-width: 1.4;
         stroke-linecap: round;
         stroke-linejoin: round;
     }
-    .traffic:hover .tl svg { opacity: 1; }
+
+    /* The traffic-light colours, now carried by the glyphs themselves. */
+    .wbtn.min { color: #febc2e; }
+    .wbtn.max { color: #28c840; }
+    .wbtn.close { color: #ff5f57; }
+
+    .wbtn.min:hover, .wbtn.max:hover, .wbtn.close:hover { color: #ffffff; }
+    .wbtn.min:hover { background: #febc2e; }
+    .wbtn.max:hover { background: #28c840; }
+    .wbtn.close:hover { background: #ff5f57; }
+
+    .wbtn.min:active { background: #f0ad1d; }
+    .wbtn.max:active { background: #1fb236; }
+    .wbtn.close:active { background: #e8504a; }
 
     .tabs {
         flex: 1 1 auto;
@@ -648,22 +656,22 @@ namespace SimpleBrowser
 <body class='__THEME__'>
 
     <div class='tabstrip'>
-        <div class='traffic'>
-            <div class='tl red' id='tl-close' title='Close'>
-                <svg viewBox='0 0 10 10'><path d='M3 3l4 4M7 3L3 7'/></svg>
-            </div>
-            <div class='tl yellow' id='tl-min' title='Minimize'>
-                <svg viewBox='0 0 10 10'><path d='M2.6 5h4.8'/></svg>
-            </div>
-            <div class='tl green' id='tl-max' title='Zoom'>
-                <svg viewBox='0 0 10 10'><path d='M3 7l4-4'/><path d='M4.4 3H7v2.6'/></svg>
-            </div>
-        </div>
-
         <div class='tabs' id='tabs'></div>
 
         <div class='newtab' id='btn-newtab' title='New tab (Ctrl+T)'>
             <svg viewBox='0 0 24 24'><path d='M12 5.5v13M5.5 12h13'/></svg>
+        </div>
+
+        <div class='wctl'>
+            <div class='wbtn min' id='wctl-min' title='Minimize'>
+                <svg viewBox='0 0 10 10'><path d='M2 5h6'/></svg>
+            </div>
+            <div class='wbtn max' id='wctl-max' title='Maximize'>
+                <svg viewBox='0 0 10 10'><rect x='2.2' y='2.2' width='5.6' height='5.6' rx='1'/></svg>
+            </div>
+            <div class='wbtn close' id='wctl-close' title='Close'>
+                <svg viewBox='0 0 10 10'><path d='M2.6 2.6l4.8 4.8M7.4 2.6L2.6 7.4'/></svg>
+            </div>
         </div>
     </div>
 
@@ -858,9 +866,9 @@ namespace SimpleBrowser
         post(field.classList.contains('loading') ? 'stop' : 'reload');
     });
 
-    document.getElementById('tl-close').addEventListener('click', function () { post('window_close'); });
-    document.getElementById('tl-min').addEventListener('click', function () { post('window_min'); });
-    document.getElementById('tl-max').addEventListener('click', function () { post('window_max'); });
+    document.getElementById('wctl-close').addEventListener('click', function () { post('window_close'); });
+    document.getElementById('wctl-min').addEventListener('click', function () { post('window_min'); });
+    document.getElementById('wctl-max').addEventListener('click', function () { post('window_max'); });
 
     document.querySelector('.tabstrip').addEventListener('dblclick', function (e) {
         if (e.target === field || field.contains(e.target)) { return; }
@@ -1146,6 +1154,16 @@ namespace SimpleBrowser
 
         focusUrl: function () {
             focusUrl();
+        },
+
+        setMaximized: function (yes) {
+            var btn = document.getElementById('wctl-max');
+            if (!btn) { return; }
+            btn.title = yes ? 'Restore' : 'Maximize';
+            // Windows draws the restore glyph as two overlapping squares.
+            btn.innerHTML = yes
+                ? '<svg viewBox=""0 0 10 10""><rect x=""2"" y=""3.4"" width=""4.8"" height=""4.8"" rx=""1""/><path d=""M3.6 3.4V2.2a.7.7 0 0 1 .7-.7h3.5a.7.7 0 0 1 .7.7v3.5a.7.7 0 0 1-.7.7H7.8""/></svg>'
+                : '<svg viewBox=""0 0 10 10""><rect x=""2.2"" y=""2.2"" width=""5.6"" height=""5.6"" rx=""1""/></svg>';
         },
 
         toast: function (text) {

@@ -80,6 +80,8 @@ namespace SimpleBrowser
         private readonly BookmarkManager _bookmarkManager;
         private readonly HistoryManager _historyManager;
         private bool _chromeReady;
+        private bool _windowStateKnown;
+        private bool _windowMaximized;
         private bool _windowIsFullScreen;
         private FormWindowState _windowStateBeforeFullScreen = FormWindowState.Normal;
         private Timer _shieldsTimer;
@@ -169,6 +171,9 @@ namespace SimpleBrowser
 
             Theme.Changed += ApplyTheme;
             Settings.Changed += OnSettingsChanged;
+
+            // Keep the window buttons in step with maximize/restore.
+            Resize += delegate { SyncWindowState(); };
         }
 
         /// <summary>
@@ -235,6 +240,9 @@ namespace SimpleBrowser
                 _chromeWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 _chromeWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 _chromeWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                // Makes -webkit-app-region: drag in the chrome actually move the
+                // window, the way a title bar should.
+                _chromeWebView.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = true;
                 _chromeWebView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
                     ? CoreWebView2PreferredColorScheme.Dark
                     : CoreWebView2PreferredColorScheme.Light;
@@ -494,6 +502,27 @@ namespace SimpleBrowser
             SyncBookmarked();
             SyncShields();
             SyncBookmarksBar();
+            SyncWindowState();
+        }
+
+        /// <summary>
+        /// Tells the chrome whether the window is maximized so the middle button
+        /// can show "maximize" or "restore", the way the Windows buttons do.
+        /// </summary>
+        private void SyncWindowState()
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            // Resize fires continuously while dragging; only talk to the chrome
+            // when the state really changed.
+            bool maximized = WindowState == FormWindowState.Maximized;
+            if (_windowStateKnown && maximized == _windowMaximized) return;
+            _windowStateKnown = true;
+            _windowMaximized = maximized;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                string.Format("window.BraveAPI && window.BraveAPI.setMaximized({0});",
+                    maximized ? "true" : "false"));
         }
 
         /// <summary>
