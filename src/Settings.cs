@@ -137,6 +137,54 @@ namespace SimpleBrowser
             get { return Json.GetBool(_values, "bookmarksBar", true); }
         }
 
+        /// <summary>Whether the start page shows its search box.</summary>
+        public bool ShowSearch
+        {
+            get { return Json.GetBool(_values, "showSearch", true); }
+        }
+
+        // ── Start-page wallpaper ─────────────────────────────────────────────
+
+        /// <summary>"aura" (the default), "gradient", "color" or "image".</summary>
+        public string WallpaperType
+        {
+            get
+            {
+                string type = Json.GetString(_values, "wallpaperType");
+                if (type == "gradient" || type == "color" || type == "image") return type;
+                return "aura";
+            }
+        }
+
+        /// <summary>A gradient id, a #rrggbb colour, a file name or a picture address.</summary>
+        public string WallpaperValue
+        {
+            get { return Json.GetString(_values, "wallpaperValue") ?? string.Empty; }
+        }
+
+        /// <summary>How far the wallpaper is darkened, in percent.</summary>
+        public int WallpaperDim
+        {
+            get { return Clamp(Json.GetInt(_values, "wallpaperDim", 0), 0, 85); }
+        }
+
+        /// <summary>Softening applied to a wallpaper picture, in pixels.</summary>
+        public int WallpaperBlur
+        {
+            get { return Clamp(Json.GetInt(_values, "wallpaperBlur", 0), 0, 40); }
+        }
+
+        /// <summary>"auto" picks readable text for the wallpaper; or force "light"/"dark".</summary>
+        public string WallpaperText
+        {
+            get
+            {
+                string mode = Json.GetString(_values, "wallpaperText");
+                if (mode == "light" || mode == "dark") return mode;
+                return "auto";
+            }
+        }
+
         /// <summary>Page zoom as a percentage: 100 is one hundred percent.</summary>
         public int Zoom
         {
@@ -196,6 +244,37 @@ namespace SimpleBrowser
                 case "bookmarksbar":
                     _values["bookmarksBar"] = AsBool(value, ShowBookmarksBar);
                     break;
+                case "showsearch":
+                    _values["showSearch"] = AsBool(value, ShowSearch);
+                    break;
+                case "wallpapertype":
+                    {
+                        string type = value as string;
+                        if (type != "aura" && type != "gradient" && type != "color" && type != "image") return false;
+                        _values["wallpaperType"] = type;
+                        break;
+                    }
+                case "wallpapervalue":
+                    {
+                        string text = value as string;
+                        if (text == null) return false;
+                        if (text.Length > 2000) text = text.Substring(0, 2000);
+                        _values["wallpaperValue"] = text;
+                        break;
+                    }
+                case "wallpaperdim":
+                    _values["wallpaperDim"] = Clamp(AsInt(value, WallpaperDim), 0, 85);
+                    break;
+                case "wallpaperblur":
+                    _values["wallpaperBlur"] = Clamp(AsInt(value, WallpaperBlur), 0, 40);
+                    break;
+                case "wallpapertext":
+                    {
+                        string mode = value as string;
+                        if (mode != "auto" && mode != "light" && mode != "dark") return false;
+                        _values["wallpaperText"] = mode;
+                        break;
+                    }
                 case "zoom":
                     {
                         int percent = AsInt(value, Zoom);
@@ -291,6 +370,13 @@ namespace SimpleBrowser
             return (int)(Math.Round(percent / 10.0) * 10);
         }
 
+        private static int Clamp(int value, int low, int high)
+        {
+            if (value < low) return low;
+            if (value > high) return high;
+            return value;
+        }
+
         // ── Storage ──────────────────────────────────────────────────────────
 
         private void ApplyDefaults()
@@ -303,6 +389,12 @@ namespace SimpleBrowser
             _values["showClock"] = true;
             _values["showTiles"] = true;
             _values["bookmarksBar"] = true;
+            _values["showSearch"] = true;
+            _values["wallpaperType"] = "aura";
+            _values["wallpaperValue"] = "";
+            _values["wallpaperDim"] = 0;
+            _values["wallpaperBlur"] = 0;
+            _values["wallpaperText"] = "auto";
             _values["zoom"] = 100;
         }
 

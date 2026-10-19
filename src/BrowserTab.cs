@@ -17,6 +17,7 @@ namespace SimpleBrowser
         private bool _isInitialized;
         private bool _isLoading;
         private bool _isHome;
+        private bool _openHomeCustomizerPending;
         private bool _isSettings;
 
         public event Action<BrowserTab, string> UrlChanged;
@@ -66,6 +67,9 @@ namespace SimpleBrowser
                 await _webView.EnsureCoreWebView2Async(env);
 
                 _isInitialized = true;
+
+                // Lets the start page show a wallpaper the user picked off disk.
+                HomeWallpaper.ApplyMapping(_webView.CoreWebView2);
 
                 // Pages should follow Aura's light/dark choice, not the OS.
                 _webView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
@@ -134,6 +138,73 @@ namespace SimpleBrowser
             if (TitleChanged != null) TitleChanged(this, "New Tab");
             if (UrlChanged != null) UrlChanged(this, "");
             if (StateChanged != null) StateChanged(this);
+        }
+
+        /// <summary>
+        /// Redraws the start page from the current settings and favourites, without
+        /// reloading it. Called after anything on the customize sheet changes, so
+        /// the sheet stays open while the page updates underneath it.
+        /// </summary>
+        public void RefreshHome()
+        {
+            if (!_isHome || !_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.AuraHome && window.AuraHome.apply(" + HomePage.StateJson() + ");");
+            }
+            catch
+            {
+                // A tab that is going away can refuse; nothing to redraw.
+            }
+        }
+
+        /// <summary>
+        /// Shows the start page and then opens its customize sheet. The sheet is
+        /// asked for once the page has loaded, so the request is never lost to a
+        /// page that has not been built yet.
+        /// </summary>
+        public void LoadHomePageWithCustomizer()
+        {
+            LoadHomePage();
+            _openHomeCustomizerPending = true;
+        }
+
+        /// <summary>Opens the start page's customize sheet, from the Aura menu.</summary>
+        public void OpenHomeCustomizer()
+        {
+            if (!_isHome || !_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.AuraHome && window.AuraHome.openCustomize();");
+            }
+            catch
+            {
+                // Nothing to open.
+            }
+        }
+
+        /// <summary>Shows a short message on the start page.</summary>
+        public void NotifyHome(string message)
+        {
+            if (!_isHome || !_isInitialized || _webView.CoreWebView2 == null) return;
+
+            // Serialising it turns the text into a safe JavaScript literal.
+            string literal = Json.Write(message ?? string.Empty);
+            if (literal == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.AuraHome && window.AuraHome.toast(" + literal + ");");
+            }
+            catch
+            {
+                // A tab on its way out cannot show anything.
+            }
         }
 
         /// <summary>Shows Aura's own settings page in this tab.</summary>
@@ -242,8 +313,12 @@ namespace SimpleBrowser
 
             if (_isInitialized && _webView.CoreWebView2 != null && (_isHome || _isSettings))
             {
+                // Toggled rather than assigned, because the start page also keeps
+                // state of its own on the body (a wallpaper needs light text, the
+                // customize sheet marks itself open).
                 _webView.CoreWebView2.ExecuteScriptAsync(
-                    "document.body.className='" + (Theme.IsDark ? "dark" : "light") + "';");
+                    "document.body.classList.toggle('dark'," + (Theme.IsDark ? "true" : "false") + ");" +
+                    "document.body.classList.toggle('light'," + (Theme.IsDark ? "false" : "true") + ");");
             }
         }
 
@@ -450,6 +525,13 @@ namespace SimpleBrowser
         {
             _isLoading = false;
 
+            // A sheet that was asked for before the page existed can open now.
+            if (_openHomeCustomizerPending)
+            {
+                _openHomeCustomizerPending = false;
+                if (_isHome) OpenHomeCustomizer();
+            }
+
             if (!e.IsSuccess && StatusTextChanged != null)
             {
                 StatusTextChanged(this, "Status: " + e.WebErrorStatus.ToString());
@@ -561,14 +643,15 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// The settings page talks to the app through this channel. Only Aura's
-        /// own page may use it: the tab has to be showing about:settings and the
-        /// message has to come from a document Aura itself wrote, so a website
-        /// loaded in this tab can never change a setting.
+        /// The settings page and the start page talk to the app through this
+        /// channel. Only Aura's own pages may use it: the tab has to be showing
+        /// about:settings or about:home, and the message has to come from a
+        /// document Aura itself wrote, so a website loaded in this tab can never
+        /// change a setting or a shortcut.
         /// </summary>
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
-            if (!_isSettings) return;
+            if (!_isSettings && !_isHome) return;
             if (!IsInternalSource(e.Source)) return;
 
             var handler = SettingsMessage;

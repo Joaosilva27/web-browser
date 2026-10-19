@@ -102,10 +102,12 @@ namespace SimpleBrowser
         /// <summary>Adds a tile for any address, used by the start page itself.</summary>
         public bool Add(string title, string url)
         {
+            url = NormalizeUrl(url);
             if (string.IsNullOrEmpty(url) || ContainsHost(url)) return false;
+
             _favorites.Add(new Favorite
             {
-                Title = string.IsNullOrEmpty(title) ? DisplayHost(url) : title,
+                Title = string.IsNullOrEmpty(title) ? DisplayHost(url) : title.Trim(),
                 Url = url,
                 Letter = LetterFor(title, url),
                 Color = ColorFor(url),
@@ -113,6 +115,109 @@ namespace SimpleBrowser
             });
             Save();
             return true;
+        }
+
+        /// <summary>
+        /// Renames a tile and/or repoints it at a new address. Matching is by the
+        /// address the tile had when the start page sent the change, so a tile can
+        /// be edited without an id of its own. Returns false when it is not found
+        /// or the new address would collide with another tile.
+        /// </summary>
+        public bool Update(string url, string title, string newUrl)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+
+            int index = IndexOf(url);
+            if (index < 0) return false;
+
+            string target = NormalizeUrl(newUrl);
+            if (string.IsNullOrEmpty(target)) target = _favorites[index].Url;
+
+            string newHost = HostOf(target);
+            for (int i = 0; i < _favorites.Count; i++)
+            {
+                if (i == index) continue;
+                if (!string.Equals(HostOf(_favorites[i].Url), newHost, StringComparison.OrdinalIgnoreCase)) continue;
+                return false;
+            }
+
+            bool moved = !string.Equals(_favorites[index].Url, target, StringComparison.OrdinalIgnoreCase);
+            _favorites[index].Url = target;
+            _favorites[index].Title = string.IsNullOrEmpty(title) ? DisplayHost(target) : title.Trim();
+
+            if (moved)
+            {
+                _favorites[index].Letter = LetterFor(_favorites[index].Title, target);
+                _favorites[index].Color = ColorFor(target);
+                _favorites[index].Icon = null;
+            }
+
+            Save();
+            return true;
+        }
+
+        /// <summary>Moves a tile, used by drag-and-drop on the start page.</summary>
+        public bool Move(int from, int to)
+        {
+            if (from < 0 || from >= _favorites.Count) return false;
+            if (to < 0) to = 0;
+            if (to > _favorites.Count) to = _favorites.Count;
+            if (to == from) return false;
+
+            var favorite = _favorites[from];
+            _favorites.RemoveAt(from);
+            if (to > from) to--;
+            if (to > _favorites.Count) to = _favorites.Count;
+            _favorites.Insert(to, favorite);
+
+            Save();
+            return true;
+        }
+
+        /// <summary>True when a tile already points at this address.</summary>
+        public bool Contains(string url)
+        {
+            return IndexOf(url) >= 0;
+        }
+
+        private int IndexOf(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return -1;
+
+            for (int i = 0; i < _favorites.Count; i++)
+            {
+                if (string.Equals(_favorites[i].Url, url, StringComparison.OrdinalIgnoreCase)) return i;
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Fills in the scheme when someone types "example.com" into the add
+        /// shortcut sheet, and rejects anything that is not a web address.
+        /// </summary>
+        public static string NormalizeUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return null;
+
+            string text = url.Trim();
+            if (text.Length == 0) return null;
+
+            if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                if (text.IndexOf("://") >= 0 || text.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+                text = "https://" + text;
+            }
+
+            string host = HostOf(text);
+            if (string.IsNullOrEmpty(host)) return null;
+            if (host.IndexOf(' ') >= 0) return null;
+            if (host.IndexOf('.') < 0) return null;
+
+            return text;
         }
 
         /// <summary>Local-file icon choices that beat what the favicon service returns.</summary>

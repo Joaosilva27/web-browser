@@ -189,11 +189,13 @@ namespace SimpleBrowser
 
                 tab.ApplyAppSettings();
 
-                // The start page draws the search engine, clock and tiles from
-                // the settings, so it has to be redrawn to show a change.
+                // The start page draws the search engine, clock, shortcuts and
+                // wallpaper from the settings. It is refreshed in place rather
+                // than reloaded, so the customize sheet stays open while the
+                // user drags a slider or picks a swatch.
                 if (tab.CurrentUrl == "about:home")
                 {
-                    tab.LoadHomePage();
+                    tab.RefreshHome();
                 }
                 else if (tab.IsSettingsPage)
                 {
@@ -1406,16 +1408,20 @@ namespace SimpleBrowser
             }
         }
 
-        /// <summary>Re-renders any tab that is sitting on the start page.</summary>
+        /// <summary>
+        /// Redraws every open start page. Refreshing in place rather than
+        /// reloading keeps the customize sheet open on the tab the user is
+        /// working in, and still keeps any other start page in step.
+        /// </summary>
         private void RefreshHomeTabs()
         {
             foreach (object page in _tabControl.TabPages)
             {
                 var tab = page as BrowserTab;
-                if (tab != null && tab.CurrentUrl == "about:home")
-                {
-                    tab.LoadHomePage();
-                }
+                if (tab == null) continue;
+                if (tab.CurrentUrl != "about:home") continue;
+
+                tab.RefreshHome();
             }
         }
 
@@ -1455,7 +1461,81 @@ namespace SimpleBrowser
             switch (action)
             {
                 case "set":
-                    Settings.Current.Set(ExtractJsonField(json, "key"), ExtractJsonValue(json, "value"));
+                    {
+                        string key = ExtractJsonField(json, "key");
+
+                        // A wallpaper the user is moving away from may be one of
+                        // our own files; tidy it once the change has gone through.
+                        bool wallpaper = key == "wallpaperType" || key == "wallpaperValue";
+                        string previous = wallpaper ? Settings.Current.WallpaperValue : null;
+
+                        Settings.Current.Set(key, ExtractJsonValue(json, "value"));
+
+                        if (wallpaper) HomeWallpaper.Tidy(previous);
+                        break;
+                    }
+
+                // ── The start page's own customization ───────────────────────
+
+                case "home_fav_add":
+                    {
+                        var fields = Json.AsObject(Json.Parse(json));
+                        string title = Json.GetString(fields, "title");
+                        string newFavorite = Json.GetString(fields, "url");
+                        bool added = FavoritesStore.Current.Add(title, newFavorite);
+                        tab.NotifyHome(added ? "Shortcut added" : "That site is already pinned");
+                        RefreshHomeTabs();
+                        break;
+                    }
+
+                case "home_fav_edit":
+                    {
+                        var fields = Json.AsObject(Json.Parse(json));
+                        bool saved = FavoritesStore.Current.Update(
+                            Json.GetString(fields, "url"),
+                            Json.GetString(fields, "title"),
+                            Json.GetString(fields, "newUrl"));
+                        tab.NotifyHome(saved ? "Shortcut updated" : "Could not save that shortcut");
+                        RefreshHomeTabs();
+                        break;
+                    }
+
+                case "home_fav_remove":
+                    {
+                        var fields = Json.AsObject(Json.Parse(json));
+                        FavoritesStore.Current.Remove(Json.GetString(fields, "url"));
+                        tab.NotifyHome("Shortcut removed");
+                        RefreshHomeTabs();
+                        break;
+                    }
+
+                case "home_fav_move":
+                    {
+                        var fields = Json.AsObject(Json.Parse(json));
+                        FavoritesStore.Current.Move(
+                            Json.GetInt(fields, "from", -1), Json.GetInt(fields, "to", -1));
+                        RefreshHomeTabs();
+                        break;
+                    }
+
+                case "home_open":
+                    {
+                        var fields = Json.AsObject(Json.Parse(json));
+                        string address = Json.GetString(fields, "url");
+                        if (!string.IsNullOrEmpty(address))
+                        {
+                            if (Json.GetBool(fields, "newTab", false)) AddNewTab(address);
+                            else if (ActiveTab != null) ActiveTab.Navigate(address);
+                        }
+                        break;
+                    }
+
+                case "home_wallpaper_pick":
+                    ChooseHomeWallpaper();
+                    break;
+
+                case "home_reset":
+                    ResetHomeCustomization();
                     break;
 
                 case "stats":
@@ -1475,6 +1555,77 @@ namespace SimpleBrowser
                     ClearData(ExtractJsonField(json, "what"), tab);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Asks for a picture and makes it the start page wallpaper. The file is
+        /// copied into Aura's own wallpapers folder first, so the page keeps
+        /// working after the original is moved or deleted.
+        /// </summary>
+        private void ChooseHomeWallpaper()
+        {
+            string previous = Settings.Current.WallpaperValue;
+
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Choose a wallpaper";
+                dialog.Filter = "Pictures (*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp)|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp" +
+                    "|All files (*.*)|*.*";
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                string name = HomeWallpaper.Import(dialog.FileName);
+                if (string.IsNullOrEmpty(name))
+                {
+                    MessageBox.Show("That picture could not be used as a wallpaper.",
+                        "Aura", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                Settings.Current.Set("wallpaperValue", name);
+                Settings.Current.Set("wallpaperType", "image");
+
+                // A picture the wallpapers folder no longer needs is tidied away,
+                // but a web address obviously stays where it is.
+                if (!string.IsNullOrEmpty(previous) && previous != name &&
+                    !previous.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    HomeWallpaper.Delete(previous);
+                }
+            }
+        }
+
+        /// <summary>Puts the start page's wallpaper and layout back to the defaults.</summary>
+        private void ResetHomeCustomization()
+        {
+            string previous = Settings.Current.WallpaperValue;
+
+            Settings.Current.Set("wallpaperType", "aura");
+            Settings.Current.Set("wallpaperValue", "");
+            Settings.Current.Set("wallpaperDim", 0);
+            Settings.Current.Set("wallpaperBlur", 0);
+            Settings.Current.Set("wallpaperText", "auto");
+            Settings.Current.Set("showClock", true);
+            Settings.Current.Set("showTiles", true);
+            Settings.Current.Set("showSearch", true);
+
+            HomeWallpaper.Tidy(previous);
+        }
+
+        /// <summary>Opens the start page and its customize sheet in the active tab.</summary>
+        private void CustomizeHomePage()
+        {
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            if (tab.CurrentUrl == "about:home")
+            {
+                tab.OpenHomeCustomizer();
+                return;
+            }
+
+            // The page is only ready to be told once it has been built, so the
+            // sheet is opened from the tab when the load finishes.
+            tab.LoadHomePageWithCustomizer();
         }
 
         private void ShowSettingsTarget(string what)
@@ -1727,6 +1878,9 @@ namespace SimpleBrowser
             });
             bookmarksBarItem.ShortcutKeyDisplayString = "Ctrl+Shift+B";
 
+            var customizeHomeItem = new ToolStripMenuItem("Customize Home Page\u2026", null,
+                delegate { CustomizeHomePage(); });
+
             var sourceItem = new ToolStripMenuItem("View Page Source", null, delegate { ShowPageSource(); });
             sourceItem.ShortcutKeyDisplayString = "Ctrl+U";
 
@@ -1773,6 +1927,7 @@ namespace SimpleBrowser
             menu.Items.Add(sourceItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(shieldItem);
+            menu.Items.Add(customizeHomeItem);
             menu.Items.Add(appearanceItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(settingsItem);
