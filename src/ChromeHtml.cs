@@ -127,6 +127,7 @@ namespace SimpleBrowser
         align-items: stretch;
         flex: none;
         align-self: stretch;
+        margin-left: auto;
         -webkit-app-region: no-drag;
     }
 
@@ -162,7 +163,10 @@ namespace SimpleBrowser
     .wbtn.close:active { background: #e8504a; }
 
     .tabs {
-        flex: 1 1 auto;
+        /* Shrink-wrapped: the New Tab button sits right after the last tab.
+           When the tabs no longer fit, this shrinks (down to min-width: 0)
+           and scrolls, which keeps the button pinned on screen. */
+        flex: 0 1 auto;
         min-width: 0;
         height: 100%;
         display: flex;
@@ -182,7 +186,8 @@ namespace SimpleBrowser
         height: 30px;
         padding: 0 7px 0 9px;
         border-radius: 7px;
-        flex: 1 1 150px;
+        flex: 0 1 auto;
+        width: 232px;
         min-width: 58px;
         max-width: 232px;
         color: var(--text2);
@@ -254,8 +259,8 @@ namespace SimpleBrowser
     }
 
     .tab-x {
-        width: 17px;
-        height: 17px;
+        width: 18px;
+        height: 18px;
         border-radius: 50%;
         flex: none;
         display: grid;
@@ -266,8 +271,8 @@ namespace SimpleBrowser
     .tab:hover .tab-x, .tab.active .tab-x { opacity: 1; }
     .tab-x:hover { background: var(--btn-hover); }
     .tab-x svg {
-        width: 9px;
-        height: 9px;
+        width: 10px;
+        height: 10px;
         fill: none;
         stroke: var(--text2);
         stroke-width: 1.6;
@@ -279,6 +284,7 @@ namespace SimpleBrowser
         width: 28px;
         height: 28px;
         flex: none;
+        margin: 0 4px;
         border-radius: 7px;
         display: grid;
         place-items: center;
