@@ -271,8 +271,8 @@ namespace SimpleBrowser
     .tab:hover .tab-x, .tab.active .tab-x { opacity: 1; }
     .tab-x:hover { background: var(--btn-hover); }
     .tab-x svg {
-        width: 10px;
-        height: 10px;
+        width: 13px;
+        height: 13px;
         fill: none;
         stroke: var(--text2);
         stroke-width: 1.6;
@@ -1100,7 +1100,7 @@ namespace SimpleBrowser
                     var close = document.createElement('div');
                     close.className = 'tab-x';
                     close.title = 'Close tab';
-                    close.innerHTML = '<svg viewBox=""0 0 20 20""><path d=""M6.5 6.5l7 7M13.5 6.5l-7 7""/></svg>';
+                    close.innerHTML = '<svg viewBox=""0 0 20 20""><path d=""M5 5l10 10M15 5l-10 10""/></svg>';
 
                     tab.appendChild(fav);
                     tab.appendChild(label);
