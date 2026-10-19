@@ -60,6 +60,21 @@ namespace SimpleBrowser
                 ? CoreWebView2PreferredColorScheme.Dark
                 : CoreWebView2PreferredColorScheme.Light;
 
+            // A sign-in window belongs to the site that opened it, so it follows
+            // that site's zoom rather than staying at the general one.
+            core.NavigationCompleted += delegate
+            {
+                try
+                {
+                    float factor = SiteSettings.Current.ZoomFor(core.Source) / 100f;
+                    if (Math.Abs(_webView.ZoomFactor - factor) > 0.001f) _webView.ZoomFactor = factor;
+                }
+                catch
+                {
+                    // The window may be closing; the next navigation picks it up.
+                }
+            };
+
             // window.close() from the popup's own script.
             core.WindowCloseRequested += delegate
             {

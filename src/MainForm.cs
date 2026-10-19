@@ -334,6 +334,9 @@ namespace SimpleBrowser
                     case "shield":
                         ShowBraveShields();
                         break;
+                    case "page_settings":
+                        ShowPageSettings(ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
+                        break;
                     case "menu":
                         ShowBraveMenu();
                         break;
@@ -1206,6 +1209,46 @@ namespace SimpleBrowser
             var shield = new BraveShieldsForm(url);
             shield.Location = new Point(Math.Max(Dpi.Px(10), Right - Dpi.Px(356)), Top + ChromePx() + Dpi.Px(6));
             shield.Show(this);
+        }
+
+        /// <summary>
+        /// The AA popover: page settings for the site on screen. The chrome says
+        /// where the AA button is, in page pixels, so the sheet can hang under it.
+        /// </summary>
+        private void ShowPageSettings(int cssX, int cssY)
+        {
+            if (_chromeWebView == null || !_chromeReady) return;
+
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            string url = tab.CurrentUrl;
+            if (string.IsNullOrEmpty(url)) return;
+            if (url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return;
+            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return;
+
+            var popover = new PageSettingsForm(url, SiteSettings.HostOf(url));
+
+            popover.ZoomChanged += delegate
+            {
+                SiteSettings.Current.SetZoom(url, popover.Zoom);
+                if (ActiveTab != null) ActiveTab.ApplySiteZoom();
+            };
+
+            popover.ReaderRequested += delegate
+            {
+                if (ActiveTab != null) ActiveTab.ToggleReader();
+            };
+
+            Point at = _chromeWebView.PointToScreen(
+                new Point(Dpi.Px(Math.Max(0, cssX)), Dpi.Px(Math.Max(0, cssY))));
+
+            Rectangle work = Screen.FromControl(this).WorkingArea;
+            int x = Math.Min(Math.Max(work.Left + Dpi.Px(6), at.X), work.Right - popover.Width - Dpi.Px(6));
+            int y = Math.Min(Math.Max(work.Top + Dpi.Px(6), at.Y + Dpi.Px(3)), work.Bottom - popover.Height - Dpi.Px(6));
+            popover.Location = new Point(x, y);
+
+            popover.Show(this);
         }
 
         private void FocusContent()

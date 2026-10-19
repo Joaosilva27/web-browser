@@ -250,11 +250,51 @@ namespace SimpleBrowser
             {
                 _webView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = Settings.Current.SavePasswords;
                 _webView.CoreWebView2.Settings.IsGeneralAutofillEnabled = Settings.Current.Autofill;
-                _webView.ZoomFactor = Settings.Current.ZoomFactor;
             }
             catch
             {
                 // A tab that is mid-teardown can refuse; the next one picks it up.
+            }
+
+            ApplySiteZoom();
+        }
+
+        /// <summary>
+        /// Puts the page on show at the zoom kept for its site. A site the user
+        /// has never zoomed follows the page zoom in Settings.
+        /// </summary>
+        public void ApplySiteZoom()
+        {
+            if (!_isInitialized || _webView == null || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                float factor = SiteSettings.Current.ZoomFor(CurrentUrl) / 100f;
+                if (Math.Abs(_webView.ZoomFactor - factor) > 0.001f) _webView.ZoomFactor = factor;
+            }
+            catch
+            {
+                // A tab that is mid-teardown can refuse; the next one picks it up.
+            }
+        }
+
+        /// <summary>
+        /// Turns reader view on or off for the page on show. Deciding what counts
+        /// as an article is left to the script, which also says so on screen when
+        /// the page has nothing to read.
+        /// </summary>
+        public void ToggleReader()
+        {
+            if (!_isInitialized || _webView == null || _webView.CoreWebView2 == null) return;
+            if (_isHome || _isSettings) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(ReaderMode.Script(Theme.IsDark));
+            }
+            catch
+            {
+                // The page may be gone; nothing to do.
             }
         }
 
@@ -524,6 +564,9 @@ namespace SimpleBrowser
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             _isLoading = false;
+
+            // The site is known by now, so the page can be shown at its own zoom.
+            ApplySiteZoom();
 
             // A sheet that was asked for before the page existed can open now.
             if (_openHomeCustomizerPending)

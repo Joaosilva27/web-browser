@@ -373,20 +373,23 @@ namespace SimpleBrowser
     }
 
     .aa {
-        width: 24px;
-        height: 22px;
+        width: 26px;
+        height: 24px;
         flex: none;
         border-radius: 5px;
-        display: grid;
-        place-items: center;
-        font-size: 11.5px;
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 0.5px;
         font-weight: 600;
-        letter-spacing: 0.2px;
         color: var(--text2);
         transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
     }
+    .aa .a1 { font-size: 10px; }
+    .aa .a2 { font-size: 13.5px; }
     .aa:hover { background: var(--btn-hover); color: var(--text); }
     .field.focused .aa { opacity: 0; pointer-events: none; }
+    .field.nopage .aa { display: none; }
 
     .url-display {
         flex: 1 1 auto;
@@ -692,8 +695,10 @@ namespace SimpleBrowser
         </div>
 
         <div class='fieldwrap'>
-            <div class='field' id='field'>
-                <div class='aa' id='btn-aa' title='Page settings'>AA</div>
+            <div class='field nopage' id='field'>
+                <div class='aa' id='btn-aa' title='Page Settings'>
+                    <span class='a1'>A</span><span class='a2'>A</span>
+                </div>
 
                 <div class='url-display' id='url-display'></div>
                 <input class='url' id='url-input' type='text' spellcheck='false'
@@ -793,6 +798,12 @@ namespace SimpleBrowser
         return { host: host, rest: rest, empty: false };
     }
 
+    function hasPage() {
+        return !!currentUrl
+            && currentUrl.indexOf('about:') !== 0
+            && currentUrl.indexOf('data:') !== 0;
+    }
+
     function renderUrl() {
         var p = pretty(currentUrl);
         urlDisplay.innerHTML = '';
@@ -863,7 +874,8 @@ namespace SimpleBrowser
     });
     document.getElementById('btn-aa').addEventListener('click', function (e) {
         e.stopPropagation();
-        post('menu');
+        var at = barAnchor(this);
+        post('page_settings', { x: at.x, y: at.y });
     });
     document.getElementById('btn-share').addEventListener('click', function () { post('share'); });
     document.getElementById('btn-menu').addEventListener('click', function () { post('menu'); });
@@ -1127,6 +1139,7 @@ namespace SimpleBrowser
 
         setUrl: function (url) {
             currentUrl = url || '';
+            field.classList.toggle('nopage', !hasPage());
             if (!field.classList.contains('focused')) {
                 renderUrl();
             }
