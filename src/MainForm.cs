@@ -3517,11 +3517,13 @@ namespace SimpleBrowser
             return null;
         }
 
-        private void ShowPageSource()
+        private async void ShowPageSource()
         {
-            if (ActiveTab == null) return;
-            string html = ActiveTab.GetSourceHtml();
-            string url = ActiveTab.CurrentUrl;
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            string url = tab.CurrentUrl;
+            string html = await tab.GetSourceHtmlAsync();
 
             using (var form = new SourceViewerForm(url, html))
             {

@@ -1486,8 +1486,11 @@ namespace SimpleBrowser
                     // region, which swallows native drags in this engine.
                     tab.addEventListener('pointerdown', function (e) {
                         if (e.button !== 0) { return; }
-                        if (e.target && (e.target.classList.contains('tab-x')
-                            || e.target.classList.contains('tab-mute'))) { return; }
+                        // The icons inside the close and mute buttons are the real
+                        // targets, so look up the tree: capturing the pointer on
+                        // the tab would swallow their clicks and start a drag.
+                        if (e.target && e.target.closest
+                            && e.target.closest('.tab-x, .tab-mute')) { return; }
 
                         dragState = {
                             from: idx,

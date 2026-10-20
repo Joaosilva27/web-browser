@@ -659,20 +659,19 @@ namespace SimpleBrowser
             }
         }
 
-        public string GetSourceHtml()
+        public async Task<string> GetSourceHtmlAsync()
         {
             if (_isInitialized && _webView.CoreWebView2 != null)
             {
                 try
                 {
-                    var task = _webView.CoreWebView2.ExecuteScriptAsync("document.documentElement.outerHTML");
-                    if (task.Wait(2000))
+                    // The result is delivered through this same UI thread, so the
+                    // call has to be awaited rather than waited on.
+                    string raw = await _webView.CoreWebView2.ExecuteScriptAsync(
+                        "document.documentElement.outerHTML");
+                    if (!string.IsNullOrEmpty(raw))
                     {
-                        string raw = task.Result;
-                        if (!string.IsNullOrEmpty(raw))
-                        {
-                            return Regex.Unescape(raw.Trim('"'));
-                        }
+                        return Regex.Unescape(raw.Trim('"'));
                     }
                 }
                 catch
