@@ -857,6 +857,33 @@ namespace SimpleBrowser
 })();";
 
         /// <summary>
+        /// A page that comes back to the front can restore focus to its "skip to
+        /// content" link, which parks that link over the top of the page. The
+        /// link is there for people walking the page with Tab, so it is only
+        /// blurred; pressing Tab on the page still brings it back.
+        /// </summary>
+        public void ClearSkipLinkFocus()
+        {
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(ClearSkipLinkScript);
+            }
+            catch
+            {
+                // A tab that is going away can refuse; nothing to clear.
+            }
+        }
+
+        private const string ClearSkipLinkScript = @"(function () {
+    var el = document.activeElement;
+    if (!el || el === document.body || el === document.documentElement) { return; }
+    if (el.tagName !== 'A' || !el.hash) { return; }
+    el.blur();
+})();";
+
+        /// <summary>
         /// Puts this tab back where the user left it. Called when the tab is
         /// shown again; a tab that has never been scrolled is left alone.
         /// </summary>

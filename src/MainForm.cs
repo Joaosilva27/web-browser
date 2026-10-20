@@ -208,7 +208,7 @@ namespace SimpleBrowser
                 SyncPageFullScreen();
                 if (!_privateMode) SessionStore.Touch();
 
-                RestoreScrollOnShow();
+                RestoreTabView();
             };
 
             _contentPanel.Controls.Add(_tabControl);
@@ -2032,16 +2032,18 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Puts the tab that just came forward back where it was. A WebView2
-        /// that has been hidden draws from the top again, so the jump is applied
-        /// once now and once more after the switch has settled.
+        /// Tidy work for the tab that has just come to the front: put the page
+        /// back where it was scrolled to, and take the page's "skip to content"
+        /// link out of the way. Both are applied again a moment later, because
+        /// the engine settles its own view and focus just after the switch.
         /// </summary>
-        private void RestoreScrollOnShow()
+        private void RestoreTabView()
         {
             var tab = ActiveTab;
             if (tab == null) return;
 
             tab.RestoreScroll();
+            tab.ClearSkipLinkFocus();
 
             var timer = new Timer();
             timer.Interval = 70;
@@ -2050,7 +2052,10 @@ namespace SimpleBrowser
                 timer.Stop();
                 timer.Dispose();
 
-                if (tab != null && !tab.IsDisposed && tab == ActiveTab) tab.RestoreScroll();
+                if (tab == null || tab.IsDisposed || tab != ActiveTab) return;
+
+                tab.RestoreScroll();
+                tab.ClearSkipLinkFocus();
             };
             timer.Start();
         }
