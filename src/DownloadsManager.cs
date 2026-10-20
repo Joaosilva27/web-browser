@@ -24,6 +24,9 @@ namespace SimpleBrowser
         public bool IsActive { get { return State == "progress"; } }
         public bool IsComplete { get { return State == "done"; } }
 
+        /// <summary>True when the user stopped it for now, but it can go on.</summary>
+        public bool IsPaused { get { return State == "paused"; } }
+
         /// <summary>How far along, from 0 to 1, or -1 when the size is unknown.</summary>
         public double Fraction
         {
@@ -53,6 +56,7 @@ namespace SimpleBrowser
             {
                 if (State == "done") return "Completed";
                 if (State == "cancelled") return "Cancelled";
+                if (State == "paused") return "Paused";
                 if (State == "failed") return string.IsNullOrEmpty(Detail) ? "Failed" : Detail;
                 return "Downloading";
             }
@@ -277,7 +281,7 @@ namespace SimpleBrowser
 
                     // A download that was running when Aura closed never
                     // finished, so it is shown as interrupted rather than live.
-                    if (record.State == "progress")
+                    if (record.State == "progress" || record.State == "paused")
                     {
                         record.State = "failed";
                         record.Detail = "Interrupted";

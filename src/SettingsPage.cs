@@ -44,6 +44,7 @@ namespace SimpleBrowser
             return Json.Obj(
                 "theme", Settings.Current.Theme,
                 "search", Settings.Current.SearchId,
+                "customSearch", Settings.Current.CustomSearchUrl,
                 "shields", Settings.Current.Shields,
                 "savePasswords", Settings.Current.SavePasswords,
                 "autofill", Settings.Current.Autofill,
@@ -68,6 +69,8 @@ namespace SimpleBrowser
                 builder.Append("<option value='").Append(engine.Id).Append("'>")
                        .Append(engine.Name).Append("</option>");
             }
+
+            builder.Append("<option value='custom'>Custom\u2026</option>");
             return builder.ToString();
         }
 
@@ -275,6 +278,22 @@ namespace SimpleBrowser
         cursor: pointer;
     }
 
+    .textbox {
+        font: inherit;
+        color: var(--text);
+        background: var(--seg);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 7px 10px;
+        width: 320px;
+        max-width: 46vw;
+    }
+    .textbox:focus {
+        outline: none;
+        border-color: var(--accent);
+        background: var(--page);
+    }
+
     input[type='range'] {
         flex: none;
         width: 200px;
@@ -401,6 +420,14 @@ namespace SimpleBrowser
                     <div class='hint'>Used by the address bar and the new tab search box.</div>
                 </div>
                 <select data-key='search'>__ENGINES__</select>
+            </div>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Custom search address</div>
+                    <div class='hint'>Put {query} where the words go, then pick Custom above.</div>
+                </div>
+                <input class='textbox' type='url' id='custom-search' spellcheck='false'
+                       placeholder='https://example.com/search?q={query}' />
             </div>
         </div>
 
@@ -639,6 +666,9 @@ namespace SimpleBrowser
     zoom.value = S.zoom;
     document.getElementById('zoom-value').textContent = S.zoom + '%';
     document.getElementById('engine-name').textContent = engineNameFrom(S.search);
+
+    var customSearch = document.getElementById('custom-search');
+    if (customSearch) { customSearch.value = S.customSearch || ''; }
     document.getElementById('profile-path').textContent = S.profilePath;
     document.getElementById('settings-path').textContent = S.settingsPath;
 
@@ -769,6 +799,13 @@ namespace SimpleBrowser
         document.getElementById('engine-name').textContent = engineNameFrom(this.value);
         flash();
     });
+
+    if (customSearch) {
+        customSearch.addEventListener('change', function () {
+            post({ action: 'set', key: 'customsearch', value: this.value });
+            flash();
+        });
+    }
 
     startupSeg.addEventListener('click', function (e) {
         var button = e.target.closest('button');

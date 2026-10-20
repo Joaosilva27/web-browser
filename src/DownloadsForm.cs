@@ -16,6 +16,7 @@ namespace SimpleBrowser
     {
         private readonly ListView _list;
         private readonly Label _count;
+        private readonly AuraButton _pause;
 
         public DownloadsForm()
         {
@@ -99,11 +100,23 @@ namespace SimpleBrowser
             _list.MouseDoubleClick += delegate { OpenSelected(); };
 
             var menu = new ContextMenuStrip();
+
+            var pauseItem = new ToolStripMenuItem("Pause", null, delegate { PauseSelected(); });
+            var resumeItem = new ToolStripMenuItem("Resume", null, delegate { ResumeSelected(); });
+
             menu.Items.Add(new ToolStripMenuItem("Open", null, delegate { OpenSelected(); }));
             menu.Items.Add(new ToolStripMenuItem("Show in Folder", null, delegate { RevealSelected(); }));
             menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(pauseItem);
+            menu.Items.Add(resumeItem);
             menu.Items.Add(new ToolStripMenuItem("Cancel", null, delegate { CancelSelected(); }));
             menu.Items.Add(new ToolStripMenuItem("Remove from List", null, delegate { RemoveSelected(); }));
+            menu.Opening += delegate
+            {
+                var record = SelectedRecord();
+                pauseItem.Enabled = record != null && record.IsActive;
+                resumeItem.Enabled = record != null && record.IsPaused;
+            };
             _list.ContextMenuStrip = menu;
 
             var bottom = new Panel();
@@ -131,10 +144,19 @@ namespace SimpleBrowser
             var remove = MakeButton("Remove", Dpi.Px(344));
             remove.Click += delegate { RemoveSelected(); };
 
+            _pause = MakeButton("Pause", Dpi.Px(440));
+            _pause.Click += delegate
+            {
+                var record = SelectedRecord();
+                if (record != null && record.IsPaused) ResumeSelected();
+                else PauseSelected();
+            };
+
             bottom.Controls.Add(open);
             bottom.Controls.Add(reveal);
             bottom.Controls.Add(cancel);
             bottom.Controls.Add(remove);
+            bottom.Controls.Add(_pause);
 
             // A ListView docked Fill and a panel docked Bottom need to be added
             // in the right order for the docking to come out as intended.
@@ -207,6 +229,13 @@ namespace SimpleBrowser
                 : (active > 0
                     ? total + (total == 1 ? " download, " : " downloads, ") + active + " in progress"
                     : total + (total == 1 ? " download" : " downloads"));
+
+            var chosen = SelectedRecord();
+            if (_pause != null)
+            {
+                _pause.Enabled = chosen != null && (chosen.IsActive || chosen.IsPaused);
+                _pause.Text = chosen != null && chosen.IsPaused ? "Resume" : "Pause";
+            }
         }
 
         private DownloadRecord SelectedRecord()
@@ -270,7 +299,7 @@ namespace SimpleBrowser
         private void CancelSelected()
         {
             var record = SelectedRecord();
-            if (record == null || !record.IsActive) return;
+            if (record == null || (!record.IsActive && !record.IsPaused)) return;
 
             try
             {
@@ -279,6 +308,44 @@ namespace SimpleBrowser
             catch
             {
                 // It may have finished a moment ago.
+            }
+        }
+
+        /// <summary>Stops a download where it is, so it can be picked up again.</summary>
+        private void PauseSelected()
+        {
+            var record = SelectedRecord();
+            if (record == null || !record.IsActive) return;
+
+            try
+            {
+                if (record.Operation == null) return;
+                record.Operation.Pause();
+                record.State = "paused";
+                DownloadsManager.Current.SaveAndNotify();
+            }
+            catch
+            {
+                // The engine may have just finished it.
+            }
+        }
+
+        /// <summary>Lets a paused download carry on from where it stopped.</summary>
+        private void ResumeSelected()
+        {
+            var record = SelectedRecord();
+            if (record == null || !record.IsPaused) return;
+
+            try
+            {
+                if (record.Operation == null) return;
+                record.Operation.Resume();
+                record.State = "progress";
+                DownloadsManager.Current.SaveAndNotify();
+            }
+            catch
+            {
+                // The download may no longer be resumable.
             }
         }
 

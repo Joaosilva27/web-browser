@@ -280,6 +280,64 @@ namespace SimpleBrowser
     }
     .tab-x:hover svg { stroke: var(--text); }
 
+    /* Shown while a tab is making noise, and kept once the tab is muted, so
+       the one silent tab among many is still findable. */
+    .tab-mute {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        flex: none;
+        display: grid;
+        place-items: center;
+        transition: background 0.12s ease;
+    }
+    .tab-mute:hover { background: var(--btn-hover); }
+    .tab-mute svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: var(--text2);
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .tab-mute:hover svg { stroke: var(--text); }
+    .tab.muted .tab-mute svg { stroke: var(--text3); }
+
+    /* The tab being dragged, and the edge it would drop against. */
+    .tab.dragging { opacity: 0.5; }
+    .tab.drop-before::before,
+    .tab.drop-after::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        width: 2px;
+        border-radius: 1px;
+        background: #007aff;
+    }
+    .tab.drop-before::before { left: 0; }
+    .tab.drop-after::after { right: 0; }
+
+    /* The chrome can be tabbed into, so focus has to be visible. */
+    .newtab:focus-visible, .iconbtn:focus-visible,
+    .aa:focus-visible, .lock:focus-visible, .star:focus-visible,
+    .reload:focus-visible, .shields:focus-visible, .wbtn:focus-visible,
+    .bitem:focus-visible, .bbar-more:focus-visible, .tab-x:focus-visible,
+    .tab-mute:focus-visible {
+        outline: 2px solid #007aff;
+        outline-offset: 1px;
+    }
+
+    /* The tab sits in a scrolling strip, which would clip an outside ring. */
+    .tab:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px #007aff;
+    }
+    .tab.active:focus-visible {
+        box-shadow: var(--tab-shadow), inset 0 0 0 2px #007aff;
+    }
+
     .newtab {
         width: 28px;
         height: 28px;
@@ -420,6 +478,31 @@ namespace SimpleBrowser
     .aa:hover { background: var(--btn-hover); color: var(--text); }
     .field.focused .aa { opacity: 0; pointer-events: none; }
     .field.nopage .aa { display: none; }
+
+    /* Site information: the lock, or an open lock when the page is plain HTTP. */
+    .lock {
+        width: 22px;
+        height: 24px;
+        flex: none;
+        border-radius: 5px;
+        display: grid;
+        place-items: center;
+        color: var(--text2);
+        transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+    }
+    .lock svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .lock:hover { background: var(--btn-hover); color: var(--text); }
+    .lock.insecure { color: #c47f00; }
+    .field.focused .lock { opacity: 0; pointer-events: none; }
+    .field.nopage .lock { display: none; }
 
     .url-display {
         flex: 1 1 auto;
@@ -721,7 +804,7 @@ namespace SimpleBrowser
     <div class='tabstrip'>
         <div class='tabs' id='tabs'></div>
 
-        <div class='newtab' id='btn-newtab' title='New tab (Ctrl+T)'>
+        <div class='newtab' id='btn-newtab' title='New tab (Ctrl+T)' role='button' tabindex='0'>
             <svg viewBox='0 0 24 24'><path d='M12 5.5v13M5.5 12h13'/></svg>
         </div>
 
@@ -731,13 +814,13 @@ namespace SimpleBrowser
         </div>
 
         <div class='wctl'>
-            <div class='wbtn min' id='wctl-min' title='Minimize'>
+            <div class='wbtn min' id='wctl-min' title='Minimize' role='button' tabindex='0'>
                 <svg viewBox='0 0 10 10'><path d='M2 5h6'/></svg>
             </div>
-            <div class='wbtn max' id='wctl-max' title='Maximize'>
+            <div class='wbtn max' id='wctl-max' title='Maximize' role='button' tabindex='0'>
                 <svg viewBox='0 0 10 10'><rect x='2.2' y='2.2' width='5.6' height='5.6' rx='1'/></svg>
             </div>
-            <div class='wbtn close' id='wctl-close' title='Close'>
+            <div class='wbtn close' id='wctl-close' title='Close' role='button' tabindex='0'>
                 <svg viewBox='0 0 10 10'><path d='M2.6 2.6l4.8 4.8M7.4 2.6L2.6 7.4'/></svg>
             </div>
         </div>
@@ -755,15 +838,19 @@ namespace SimpleBrowser
 
         <div class='fieldwrap'>
             <div class='field nopage' id='field'>
-                <div class='aa' id='btn-aa' title='Page Settings'>
+                <div class='aa' id='btn-aa' title='Page Settings' role='button' tabindex='0'>
                     <span class='a1'>A</span><span class='a2'>A</span>
+                </div>
+
+                <div class='lock' id='btn-lock' title='Site information' role='button' tabindex='0'>
+                    <svg viewBox='0 0 24 24'><rect x='5' y='10.6' width='14' height='9.2' rx='2'/><path d='M8.3 10.6V8a3.7 3.7 0 0 1 7.4 0v2.6'/></svg>
                 </div>
 
                 <div class='url-display' id='url-display'></div>
                 <input class='url' id='url-input' type='text' spellcheck='false'
                        autocomplete='off' autocapitalize='off' />
 
-                <div class='star' id='btn-star' title='Bookmark this page (Ctrl+D)'>
+                <div class='star' id='btn-star' title='Bookmark this page (Ctrl+D)' role='button' tabindex='0'>
                     <svg viewBox='0 0 24 24'><path d='M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.58L12 16.4l-5.01 2.63.96-5.58L3.9 9.5l5.6-.8z'/></svg>
                 </div>
 
@@ -780,7 +867,7 @@ namespace SimpleBrowser
                 <span class='dl-count none' id='dl-count'>0</span>
             </button>
 
-            <div class='shields' id='btn-shields' title='Aura Shields'>
+            <div class='shields' id='btn-shields' title='Aura Shields' role='button' tabindex='0'>
                 <svg viewBox='0 0 24 24'><path d='M12 3.2 5.2 6v5.3c0 4.35 2.9 7.6 6.8 9.5 3.9-1.9 6.8-5.15 6.8-9.5V6L12 3.2z'/></svg>
                 <span class='shield-count' id='shields-count'>0</span>
             </div>
@@ -799,7 +886,7 @@ namespace SimpleBrowser
         <div class='bbar-items' id='bbar-items'></div>
         <!-- No title here: Chromium's popup tooltip would sit over the first
              item of the menu this button opens. -->
-        <div class='bbar-more' id='bbar-more'>
+        <div class='bbar-more' id='bbar-more' role='button' tabindex='0'>
             <svg viewBox='0 0 24 24'><path d='M9.5 6l6 6-6 6'/></svg>
         </div>
     </div>
@@ -821,12 +908,104 @@ namespace SimpleBrowser
     var urlDisplay = document.getElementById('url-display');
     var currentUrl = '';
 
+    // The chrome is a web page, so every control that is not a real button has
+    // to opt into the tab order and answer Enter and Space itself.
+    function keyClick(el, action) {
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                action();
+            }
+        });
+    }
+
+    // Reordering tabs by hand. The strip itself is a window drag region, so the
+    // tab is dragged as a whole and dropped against the edge of another one.
+    var dragState = null;
+    var lastDragEnd = 0;
+
+    function clearDropMarks() {
+        var marks = document.querySelectorAll('.drop-before, .drop-after');
+        for (var i = 0; i < marks.length; i++) {
+            marks[i].classList.remove('drop-before', 'drop-after');
+        }
+    }
+
+    // The drag is followed on the document, not on the tab: the pointer leaves
+    // the tab the moment the drag starts, and the events go with it.
+    document.addEventListener('pointermove', function (e) {
+        if (!dragState) { return; }
+        if (!dragState.moved && Math.abs(e.clientX - dragState.startX) < 6) { return; }
+
+        dragState.moved = true;
+        dragState.element.classList.add('dragging');
+
+        var hit = document.elementFromPoint(e.clientX, e.clientY);
+        while (hit && !hit.classList.contains('tab')) { hit = hit.parentElement; }
+
+        clearDropMarks();
+        if (hit && hit !== dragState.element) {
+            var box = hit.getBoundingClientRect();
+            var after = e.clientX > box.left + box.width / 2;
+            hit.classList.add(after ? 'drop-after' : 'drop-before');
+            dragState.over = Number(hit.dataset.index);
+            dragState.after = after;
+        } else {
+            dragState.over = -1;
+        }
+    });
+
+    document.addEventListener('pointerup', function () {
+        if (!dragState) { return; }
+
+        var finished = dragState;
+        dragState = null;
+
+        finished.element.classList.remove('dragging');
+        clearDropMarks();
+
+        if (!finished.moved) { return; }
+
+        lastDragEnd = new Date().getTime();
+
+        if (finished.over >= 0) {
+            post('tab_move', {
+                from: finished.from,
+                to: finished.over + (finished.after ? 1 : 0)
+            });
+        }
+    });
+
+    document.addEventListener('pointercancel', function () {
+        if (!dragState) { return; }
+
+        dragState.element.classList.remove('dragging');
+        dragState = null;
+        clearDropMarks();
+    });
+
     // Host -> page messages. Used as a second, independent channel for
     // keyboard shortcuts that move focus into the chrome.
     if (window.chrome && window.chrome.webview) {
         window.chrome.webview.addEventListener('message', function (e) {
             var m = e.data;
             if (m && m.action === 'focus_url') { focusUrl(); }
+            if (m && m.action === 'focus_chrome') {
+                // The view itself only takes focus a moment after the host
+                // asks, so the ring is applied on the next turn.
+                setTimeout(function () {
+                    var t = document.querySelector('.tab');
+                    if (t) { t.focus({ preventScroll: true }); }
+                    else { document.getElementById('btn-newtab').focus({ preventScroll: true }); }
+
+                    // Focusing must never nudge the chrome itself.
+                    document.body.scrollTop = 0;
+                    document.documentElement.scrollTop = 0;
+                }, 50);
+            }
         });
     }
 
@@ -964,6 +1143,11 @@ namespace SimpleBrowser
         var at = barAnchor(this);
         post('page_settings', { x: at.x, y: at.y });
     });
+    document.getElementById('btn-lock').addEventListener('click', function (e) {
+        e.stopPropagation();
+        var at = barAnchor(this);
+        post('site_info', { x: at.x, y: at.y });
+    });
     document.getElementById('btn-share').addEventListener('click', function () { post('share'); });
     document.getElementById('btn-menu').addEventListener('click', function () { post('menu'); });
     document.getElementById('btn-shields').addEventListener('click', function () { post('shield'); });
@@ -975,6 +1159,21 @@ namespace SimpleBrowser
     document.getElementById('wctl-close').addEventListener('click', function () { post('window_close'); });
     document.getElementById('wctl-min').addEventListener('click', function () { post('window_min'); });
     document.getElementById('wctl-max').addEventListener('click', function () { post('window_max'); });
+
+    keyClick(document.getElementById('btn-newtab'), function () { post('new_tab'); });
+    keyClick(document.getElementById('btn-star'), function () { post('bookmark'); });
+    keyClick(document.getElementById('btn-aa'), function () {
+        var at = barAnchor(document.getElementById('btn-aa'));
+        post('page_settings', { x: at.x, y: at.y });
+    });
+    keyClick(document.getElementById('btn-lock'), function () {
+        var at = barAnchor(document.getElementById('btn-lock'));
+        post('site_info', { x: at.x, y: at.y });
+    });
+    keyClick(document.getElementById('btn-shields'), function () { post('shield'); });
+    keyClick(document.getElementById('wctl-close'), function () { post('window_close'); });
+    keyClick(document.getElementById('wctl-min'), function () { post('window_min'); });
+    keyClick(document.getElementById('wctl-max'), function () { post('window_max'); });
 
     document.querySelector('.tabstrip').addEventListener('dblclick', function (e) {
         if (e.target === field || field.contains(e.target)) { return; }
@@ -1045,6 +1244,8 @@ namespace SimpleBrowser
     function buildBarItem(item) {
         var el = document.createElement('div');
         el.className = 'bitem';
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
         el.dataset.tip = item.kind === 'folder'
             ? (item.title || 'Folder') + ' \u2014 folder'
             : (item.title || item.url || '');
@@ -1062,6 +1263,13 @@ namespace SimpleBrowser
                 post('bm_folder', { path: item.path, x: at.x, y: at.y });
             } else {
                 post('bm_open', { url: item.url, newTab: e.metaKey || e.ctrlKey, x: at.x, y: at.y });
+            }
+        });
+
+        el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                el.click();
             }
         });
 
@@ -1152,6 +1360,12 @@ namespace SimpleBrowser
         var at = barAnchor(bbarMore);
         post('bm_more', { index: barOverflowFrom, x: at.x, y: at.y });
     });
+    bbarMore.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            bbarMore.click();
+        }
+    });
 
     bbar.addEventListener('contextmenu', function (e) {
         e.preventDefault();
@@ -1200,13 +1414,53 @@ namespace SimpleBrowser
                     var close = document.createElement('div');
                     close.className = 'tab-x';
                     close.title = 'Close tab';
+                    close.setAttribute('role', 'button');
+                    close.setAttribute('tabindex', '0');
                     close.innerHTML = '<svg viewBox=""0 0 20 20""><path d=""M5 5l10 10M15 5l-10 10""/></svg>';
 
                     tab.appendChild(fav);
                     tab.appendChild(label);
+
+                    // A speaker only appears while the tab has something to say,
+                    // and it stays put once muted so silence can be undone.
+                    if (info.audio || info.muted) {
+                        var mute = document.createElement('div');
+                        mute.className = 'tab-mute';
+                        mute.title = info.muted ? 'Unmute tab' : 'Mute tab';
+                        mute.setAttribute('role', 'button');
+                        mute.setAttribute('tabindex', '0');
+                        mute.innerHTML = info.muted
+                            ? '<svg viewBox=""0 0 24 24""><path d=""M4 9.4h3.3L12 5.6v12.8L7.3 14.6H4z""/><path d=""M15.6 9.6l4.8 4.8""/><path d=""M20.4 9.6l-4.8 4.8""/></svg>'
+                            : '<svg viewBox=""0 0 24 24""><path d=""M4 9.4h3.3L12 5.6v12.8L7.3 14.6H4z""/><path d=""M15.3 8.7a4.7 4.7 0 0 1 0 6.6""/><path d=""M17.7 6.3a8 8 0 0 1 0 11.4""/></svg>';
+                        mute.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            post('tab_mute', { index: idx });
+                        });
+                        mute.addEventListener('keydown', function (e) {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                post('tab_mute', { index: idx });
+                            }
+                        });
+                        tab.appendChild(mute);
+                    }
+
                     tab.appendChild(close);
 
+                    if (info.audio) { tab.classList.add('audio'); }
+                    if (info.muted) { tab.classList.add('muted'); }
+
+                    // Keyboard users reach the strip with F6 and walk it with Tab;
+                    // Enter or Space picks the tab, as it would anywhere else.
+                    tab.setAttribute('role', 'tab');
+                    tab.setAttribute('tabindex', '0');
+                    tab.setAttribute('aria-selected', idx === activeIdx ? 'true' : 'false');
+                    tab.dataset.index = String(idx);
+
                     tab.addEventListener('click', function () {
+                        // A drag that ended on this very tab must not also switch.
+                        if (new Date().getTime() - lastDragEnd < 250) { return; }
                         post('switch_tab', { index: idx });
                     });
                     tab.addEventListener('auxclick', function (e) {
@@ -1215,9 +1469,47 @@ namespace SimpleBrowser
                             post('close_tab', { index: idx });
                         }
                     });
+                    tab.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            post('switch_tab', { index: idx });
+                        }
+                    });
+                    tab.addEventListener('contextmenu', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var at = barAnchor(tab);
+                        post('tab_menu', { index: idx, x: at.x, y: at.y });
+                    });
+                    // Reordering by hand. Pointer events are used rather than
+                    // HTML5 drag and drop because the strip is a window drag
+                    // region, which swallows native drags in this engine.
+                    tab.addEventListener('pointerdown', function (e) {
+                        if (e.button !== 0) { return; }
+                        if (e.target && (e.target.classList.contains('tab-x')
+                            || e.target.classList.contains('tab-mute'))) { return; }
+
+                        dragState = {
+                            from: idx,
+                            startX: e.clientX,
+                            moved: false,
+                            over: -1,
+                            after: false,
+                            element: tab
+                        };
+
+                        try { tab.setPointerCapture(e.pointerId); } catch (err) { }
+                    });
                     close.addEventListener('click', function (e) {
                         e.stopPropagation();
                         post('close_tab', { index: idx });
+                    });
+                    close.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            post('close_tab', { index: idx });
+                        }
                     });
 
                     container.appendChild(tab);
@@ -1270,6 +1562,15 @@ namespace SimpleBrowser
         setPrivate: function (on) {
             var el = document.getElementById('priv');
             if (el) { el.classList.toggle('on', !!on); }
+        },
+
+        setSecure: function (secure) {
+            var lock = document.getElementById('btn-lock');
+            if (!lock) { return; }
+            lock.classList.toggle('insecure', !secure);
+            lock.title = secure
+                ? 'Site information - secure connection'
+                : 'Site information - not secure';
         },
 
         setDownloads: function (total, active) {

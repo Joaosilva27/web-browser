@@ -14,9 +14,23 @@ namespace SimpleBrowser
         public string BaseUrl;
         public string QueryParam;
 
+        /// <summary>
+        /// A whole address with {query} where the words go. Search engines the
+        /// user adds are stored this way, because they rarely fit the simple
+        /// base-plus-one-parameter shape.
+        /// </summary>
+        public string Template;
+
         public string Build(string query)
         {
-            return BaseUrl + "?" + QueryParam + "=" + Uri.EscapeDataString(query);
+            string escaped = Uri.EscapeDataString(query);
+
+            if (!string.IsNullOrEmpty(Template))
+            {
+                return Template.Replace("{query}", escaped);
+            }
+
+            return BaseUrl + "?" + QueryParam + "=" + escaped;
         }
     }
 
@@ -92,17 +106,63 @@ namespace SimpleBrowser
             get { return Json.GetString(_values, "search") ?? "brave"; }
         }
 
+        /// <summary>
+        /// The address of a search engine the user added, with {query} marking
+        /// where the words go. Empty means none has been added yet.
+        /// </summary>
+        public string CustomSearchUrl
+        {
+            get { return Json.GetString(_values, "customSearch") ?? string.Empty; }
+        }
+
         public SearchEngine Engine
         {
             get
             {
                 string id = SearchId;
+                if (string.Equals(id, "custom", StringComparison.OrdinalIgnoreCase))
+                {
+                    var custom = BuildCustomEngine();
+                    if (custom != null) return custom;
+                }
+
                 foreach (var engine in Engines)
                 {
                     if (string.Equals(engine.Id, id, StringComparison.OrdinalIgnoreCase)) return engine;
                 }
                 return Engines[0];
             }
+        }
+
+        /// <summary>
+        /// True when an address can serve as a search template: it has to be a
+        /// web address and it has to say where the words belong.
+        /// </summary>
+        public static bool IsSearchTemplate(string address)
+        {
+            if (string.IsNullOrEmpty(address)) return false;
+
+            string trimmed = address.Trim();
+            if (trimmed.IndexOf("{query}", StringComparison.OrdinalIgnoreCase) < 0) return false;
+
+            if (!trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                && !trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) return false;
+
+            return true;
+        }
+
+        private SearchEngine BuildCustomEngine()
+        {
+            string template = CustomSearchUrl;
+            if (!IsSearchTemplate(template)) return null;
+
+            return new SearchEngine
+            {
+                Id = "custom",
+                Name = "Custom search",
+                ShortName = "the search engine you added",
+                Template = template.Trim()
+            };
         }
 
         /// <summary>Ads and trackers are blocked unless the user turns this off.</summary>
@@ -244,8 +304,28 @@ namespace SimpleBrowser
                 case "search":
                     {
                         string id = value as string;
+
+                        if (string.Equals(id, "custom", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!IsSearchTemplate(CustomSearchUrl)) return false;
+                            _values["search"] = "custom";
+                            break;
+                        }
+
                         if (Find(id) == null) return false;
                         _values["search"] = Find(id).Id;
+                        break;
+                    }
+                case "customsearch":
+                    {
+                        string address = value as string;
+                        if (address == null) return false;
+
+                        address = address.Trim();
+                        if (address.Length > 2000) return false;
+                        if (address.Length > 0 && !IsSearchTemplate(address)) return false;
+
+                        _values["customSearch"] = address;
                         break;
                     }
                 case "shields":
@@ -415,6 +495,7 @@ namespace SimpleBrowser
         {
             _values["theme"] = "system";
             _values["search"] = "brave";
+            _values["customSearch"] = "";
             _values["shields"] = true;
             _values["savePasswords"] = true;
             _values["autofill"] = true;

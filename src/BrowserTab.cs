@@ -34,6 +34,23 @@ namespace SimpleBrowser
         public event Action<BrowserTab> StateChanged;
         public event Action<BrowserTab, string> StatusTextChanged;
         public event Action<BrowserTab> IconChanged;
+        public event Action<BrowserTab> AudioChanged;
+
+        /// <summary>Raised when the page's process dies, so the host can offer a reload.</summary>
+        public event Action<BrowserTab> CrashReported;
+
+        /// <summary>Raised when a site sends a notification it was allowed to send.</summary>
+        public event Action<BrowserTab, CoreWebView2NotificationReceivedEventArgs> NotificationArrived;
+
+        /// <summary>
+        /// Raised when the page's zoom moved without the app asking, which is
+        /// what Ctrl+wheel does inside the engine. The host remembers it for
+        /// the site, so a wheel zoom survives a reload like any other.
+        /// </summary>
+        public event Action<BrowserTab, int> SiteZoomChanged;
+
+        /// <summary>Raised when a site behind a login asks for a name and password.</summary>
+        public event Action<BrowserTab, CoreWebView2BasicAuthenticationRequestedEventArgs> AuthenticationRequested;
         public event EventHandler<CoreWebView2NewWindowRequestedEventArgs> NewWindowRequested;
         public event Action<BrowserTab> WindowCloseRequested;
 
@@ -65,6 +82,115 @@ namespace SimpleBrowser
         public bool IsLoading { get { return _isLoading; } }
         /// <summary>True when this tab lives in a private window.</summary>
         public bool IsPrivate { get { return _privateMode; } }
+
+        /// <summary>True while the page is making sound, which is what puts the
+        /// speaker on the tab.</summary>
+        public bool IsPlayingAudio
+        {
+            get
+            {
+                try
+                {
+                    return _isInitialized && _webView.CoreWebView2 != null && _webView.CoreWebView2.IsDocumentPlayingAudio;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>True when the tab has been silenced by hand.</summary>
+        public bool IsMuted
+        {
+            get
+            {
+                try
+                {
+                    return _isInitialized && _webView.CoreWebView2 != null && _webView.CoreWebView2.IsMuted;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>Silences or unsilences this tab, the way the speaker does.</summary>
+        public void ToggleMute()
+        {
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+            _webView.CoreWebView2.IsMuted = !_webView.CoreWebView2.IsMuted;
+        }
+
+        private Panel _crashCover;
+
+        /// <summary>
+        /// Puts a card over a tab whose page process died. Without it the tab
+        /// would just be blank, with no hint that reloading is all it needs.
+        /// </summary>
+        public void ShowCrashCover()
+        {
+            HideCrashCover();
+
+            var cover = new Panel();
+            cover.Dock = DockStyle.Fill;
+            cover.BackColor = Theme.ContentBackground;
+
+            var title = new Label();
+            title.Text = "This tab stopped working";
+            title.Font = new Font("Segoe UI Semibold", 15F);
+            title.ForeColor = Theme.TextPrimary;
+            title.AutoSize = true;
+
+            var hint = new Label();
+            hint.Text = "The page ran into a problem and had to be closed. Reloading usually brings it back.";
+            hint.Font = new Font("Segoe UI", 9.5F);
+            hint.ForeColor = Theme.TextSecondary;
+            hint.AutoSize = true;
+
+            var reload = new AuraButton();
+            reload.Text = "Reload";
+            reload.Size = new Size(Dpi.Px(112), Dpi.Px(34));
+            reload.Radius = Dpi.Px(8);
+            reload.BackColor = Theme.AccentBlue;
+            reload.ForeColor = Color.White;
+            reload.TabStop = true;
+            reload.Click += delegate
+            {
+                HideCrashCover();
+                Reload();
+            };
+
+            cover.Controls.Add(title);
+            cover.Controls.Add(hint);
+            cover.Controls.Add(reload);
+
+            Action place = delegate
+            {
+                int middle = cover.ClientSize.Width / 2;
+                title.Location = new Point(middle - title.Width / 2, cover.ClientSize.Height / 2 - Dpi.Px(78));
+                hint.Location = new Point(middle - hint.Width / 2, title.Bottom + Dpi.Px(10));
+                reload.Location = new Point(middle - reload.Width / 2, hint.Bottom + Dpi.Px(24));
+            };
+            cover.Resize += delegate { place(); };
+
+            Controls.Add(cover);
+            cover.BringToFront();
+            place();
+
+            _crashCover = cover;
+        }
+
+        /// <summary>Takes the crash card away, before a reload or a new page.</summary>
+        public void HideCrashCover()
+        {
+            if (_crashCover == null) return;
+
+            Controls.Remove(_crashCover);
+            _crashCover.Dispose();
+            _crashCover = null;
+        }
         public bool CanGoBack { get { return _webView != null && _isInitialized && _webView.CanGoBack; } }
         public bool CanGoForward { get { return _webView != null && _isInitialized && _webView.CanGoForward; } }
 
@@ -130,6 +256,12 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.DownloadStarting += OnDownloadStarting;
                 _webView.CoreWebView2.PermissionRequested += OnPermissionRequested;
                 _webView.CoreWebView2.ContextMenuRequested += OnContextMenuRequested;
+                _webView.CoreWebView2.IsDocumentPlayingAudioChanged += OnAudioChanged;
+                _webView.CoreWebView2.IsMutedChanged += OnAudioChanged;
+                _webView.CoreWebView2.ProcessFailed += OnProcessFailed;
+                _webView.CoreWebView2.NotificationReceived += OnNotificationReceived;
+                _webView.CoreWebView2.BasicAuthenticationRequested += OnBasicAuthenticationRequested;
+                _webView.ZoomFactorChanged += OnZoomFactorChanged;
 
                 var controller = BrowserEnvironment.ControllerOf(_webView);
                 if (controller != null) controller.AcceleratorKeyPressed += OnAcceleratorKeyPressed;
@@ -614,6 +746,7 @@ namespace SimpleBrowser
         {
             _isLoading = true;
             _scrollY = 0;
+            HideCrashCover();
 
             if (!string.IsNullOrEmpty(e.Uri))
             {
@@ -711,6 +844,47 @@ namespace SimpleBrowser
         {
             var handler = ContextMenuRequested;
             if (handler != null) handler(this, e);
+        }
+
+        private void OnAudioChanged(object sender, object e)
+        {
+            if (AudioChanged != null) AudioChanged(this);
+        }
+
+        /// <summary>
+        /// The engine zoomed the page by itself. Ctrl+wheel goes through
+        /// Chromium rather than through the host, so this is where that gesture
+        /// becomes a per-site choice the next page load will honour.
+        /// </summary>
+        private void OnZoomFactorChanged(object sender, EventArgs e)
+        {
+            if (!_isInitialized || _webView == null) return;
+
+            int percent = (int)Math.Round(_webView.ZoomFactor * 100);
+            if (Math.Abs(percent - SiteSettings.Current.ZoomFor(CurrentUrl)) <= 1) return;
+
+            if (SiteZoomChanged != null) SiteZoomChanged(this, percent);
+        }
+
+        private void OnProcessFailed(object sender, CoreWebView2ProcessFailedEventArgs e)
+        {
+            // The browser process taking the engine down cannot be recovered,
+            // but a dead renderer can: the tab is emptied and the host offers
+            // to load the page again.
+            if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) return;
+
+            if (CrashReported != null) CrashReported(this);
+        }
+
+        private void OnNotificationReceived(object sender, CoreWebView2NotificationReceivedEventArgs e)
+        {
+            if (NotificationArrived != null) NotificationArrived(this, e);
+            else e.Handled = false;
+        }
+
+        private void OnBasicAuthenticationRequested(object sender, CoreWebView2BasicAuthenticationRequestedEventArgs e)
+        {
+            if (AuthenticationRequested != null) AuthenticationRequested(this, e);
         }
 
         private void OnAcceleratorKeyPressed(object sender, CoreWebView2AcceleratorKeyPressedEventArgs e)
