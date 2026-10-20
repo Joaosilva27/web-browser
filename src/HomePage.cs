@@ -26,6 +26,8 @@ namespace SimpleBrowser
         --text3: #9a9aa0;
         --field: #ffffff;
         --field-line: rgba(0, 0, 0, 0.06);
+        --pill: rgba(255, 255, 255, 0.74);
+        --pill-line: rgba(0, 0, 0, 0.07);
         --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 22px rgba(0, 0, 0, 0.07);
         --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
         --tile-bg: #ffffff;
@@ -60,6 +62,8 @@ namespace SimpleBrowser
         --text3: #8a8a90;
         --field: #2a2a2d;
         --field-line: rgba(255, 255, 255, 0.07);
+        --pill: rgba(42, 42, 45, 0.74);
+        --pill-line: rgba(255, 255, 255, 0.10);
         --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 26px rgba(0, 0, 0, 0.28);
         --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.40);
         --tile-bg: #ffffff;
@@ -84,6 +88,8 @@ namespace SimpleBrowser
         --text3: rgba(255, 255, 255, 0.66);
         --field: rgba(20, 20, 22, 0.58);
         --field-line: rgba(255, 255, 255, 0.16);
+        --pill: rgba(20, 20, 22, 0.56);
+        --pill-line: rgba(255, 255, 255, 0.20);
         --field-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 10px 34px rgba(0, 0, 0, 0.30);
         --hover: rgba(255, 255, 255, 0.16);
         --tile-line: rgba(255, 255, 255, 0.22);
@@ -843,11 +849,68 @@ namespace SimpleBrowser
     body.modal-open { overflow: hidden; }
     body.sheet-open .fab { right: calc(var(--sheet-w) + 20px); }
     body.sheet-open .footer { padding-right: calc(var(--sheet-w) + 24px); }
+    body.sheet-open .acct { display: none; }
+
+    /* ── Google account ────────────────────────────────────────────────── */
+
+    .acct {
+        position: fixed;
+        top: 16px;
+        right: 18px;
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        max-width: 260px;
+        height: 38px;
+        padding: 0 14px 0 6px;
+        border: 1px solid var(--pill-line);
+        border-radius: 999px;
+        background: var(--pill);
+        color: var(--text);
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(160%);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10), 0 8px 24px rgba(0, 0, 0, 0.12);
+        transition: transform 0.14s ease, box-shadow 0.14s ease;
+    }
+    .acct:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12), 0 12px 28px rgba(0, 0, 0, 0.16); }
+    .acct:active { transform: translateY(0); }
+
+    .acct-face {
+        position: relative;
+        width: 27px;
+        height: 27px;
+        flex: none;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+    }
+    .acct-face svg { width: 15px; height: 15px; display: block; }
+    .acct-face img { display: none; width: 100%; height: 100%; object-fit: cover; }
+    .acct.has-avatar .acct-face svg { display: none; }
+    .acct.has-avatar .acct-face img { display: block; }
+
+    .acct-name {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .acct.in .acct-name { color: var(--text); }
+    .acct:not(.in) .acct-name { color: var(--text2); }
 
     @media (max-width: 560px) {
         .clock { font-size: 46px; }
         .footer { display: none; }
         .fab { bottom: 18px; }
+        .acct-name { display: none; }
+        .acct { padding: 0 6px; }
     }
 </style>
 </head>
@@ -879,6 +942,19 @@ namespace SimpleBrowser
         <span class='dot'></span><span id='shields'>Toge Shields are active</span>
     </div>
 </div>
+
+<button class='acct' id='acct' type='button' title='Sign in to Google'>
+    <span class='acct-face' id='acct-face'>
+        <svg viewBox='0 0 48 48' aria-hidden='true'>
+            <path fill='#ea4335' d='M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z'/>
+            <path fill='#4285f4' d='M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z'/>
+            <path fill='#fbbc05' d='M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z'/>
+            <path fill='#34a853' d='M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z'/>
+        </svg>
+        <img id='acct-img' alt='' />
+    </span>
+    <span class='acct-name' id='acct-name'>Sign in to Google</span>
+</button>
 
 <button class='fab' id='btn-customize' type='button' title='Customize this page'>
     <svg viewBox='0 0 24 24'><path d='M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z'/><path d='M13.5 6.5 17.5 10.5'/></svg>
@@ -1503,6 +1579,38 @@ var TogeHome = (function () {
         }
     }
 
+    /* ── Google account ───────────────────────────────────────────────── */
+
+    // The session lives in the browser profile, so signing in here signs the
+    // whole browser in: sites offering 'Sign in with Google' then list the
+    // account without asking for a password again.
+    function renderAccount(account) {
+        account = account || {};
+
+        var chip = byId('acct');
+        var img = byId('acct-img');
+        var signed = !!account.signedIn;
+        var avatar = account.avatar || '';
+
+        chip.classList.toggle('in', signed);
+        chip.classList.toggle('has-avatar', signed && !!avatar);
+
+        if (signed && avatar) {
+            if (img.getAttribute('src') !== avatar) img.src = avatar;
+        } else {
+            img.removeAttribute('src');
+        }
+
+        if (signed) {
+            var who = account.name || (account.email ? account.email.split('@')[0] : '');
+            byId('acct-name').textContent = who || 'Google account';
+            chip.title = (account.email || who || 'Google account') + ' — manage your Google account';
+        } else {
+            byId('acct-name').textContent = 'Sign in to Google';
+            chip.title = 'Sign in to Google';
+        }
+    }
+
     /* ── Putting it together ───────────────────────────────────────────── */
 
     function applyLayout() {
@@ -1526,6 +1634,7 @@ var TogeHome = (function () {
         document.body.classList.toggle('light', !state.dark);
 
         byId('shields').textContent = state.shields || 'Toge Shields are active';
+        renderAccount(state.google);
 
         if (!swatchesBuilt) buildSwatches();
 
@@ -1554,6 +1663,10 @@ var TogeHome = (function () {
     }, true);
 
     byId('btn-customize').addEventListener('click', openSheet);    byId('sheet-close').addEventListener('click', closeSheet);
+
+    byId('acct').addEventListener('click', function () {
+        post({ action: 'google_account' });
+    });
 
     byId('opt-tiles').addEventListener('change', function () {
         post({ action: 'set', key: 'showTiles', value: this.checked });
@@ -1810,6 +1923,7 @@ TogeHome.apply(__STATE__);
                 "searchParam", engine.QueryParam,
                 "searchName", engine.ShortName,
                 "shields", ShieldsNote(),
+                "google", GoogleAccount.State(),
                 "favorites", favorites,
                 "wallpaper", wallpaper,
                 "presets", Json.Obj("gradients", gradients, "colors", colors));

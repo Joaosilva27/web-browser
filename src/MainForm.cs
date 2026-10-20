@@ -132,6 +132,10 @@ namespace SimpleBrowser
             // its own toolbar count in step.
             DownloadsManager.Current.Changed += OnDownloadsChanged;
 
+            // The Google account is shared too: every start page redraws its
+            // account chip when the profile signs in or out.
+            GoogleAccount.Changed += OnGoogleAccountChanged;
+
             InitializeWindow();
             InitializeChrome();
 
@@ -327,10 +331,14 @@ namespace SimpleBrowser
                     chromeController.AcceleratorKeyPressed += OnChromeAcceleratorPressed;
                 }
 
-                _chromeWebView.CoreWebView2.DOMContentLoaded += delegate
+                _chromeWebView.CoreWebView2.DOMContentLoaded += async delegate
                 {
                     _chromeReady = true;
                     SyncAllToChrome();
+
+                    // The chrome view shares the profile, so it can answer the
+                    // cookie question without touching a page.
+                    await GoogleAccount.RefreshAsync(_chromeWebView.CoreWebView2);
                 };
 
                 _chromeWebView.NavigateToString(ChromeHtml.GetHtml(Theme.IsDark));
@@ -2965,6 +2973,16 @@ namespace SimpleBrowser
         }
 
         /// <summary>
+        /// The Google account changed (signed in, out, or a name arrived), so
+        /// every start page redraws its chip. Pages that are not the start page
+        /// ignore the call.
+        /// </summary>
+        private void OnGoogleAccountChanged()
+        {
+            RefreshHomeTabs();
+        }
+
+        /// <summary>
         /// Runs a download Toge's way: the file lands in the Downloads folder
         /// (or wherever the user asks), the list keeps up with it, and WebView2's
         /// own download bar never appears inside the page.
@@ -3232,6 +3250,12 @@ namespace SimpleBrowser
                     }
 
                 // ── The start page's own customization ───────────────────────
+
+                // Google is signed in through the profile, so the account page
+                // is the only place the password ever has to be typed.
+                case "google_account":
+                    AddNewTab("https://accounts.google.com/");
+                    break;
 
                 case "home_fav_add":
                     {

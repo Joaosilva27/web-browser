@@ -772,6 +772,10 @@ namespace SimpleBrowser
             // The site is known by now, so the page can be shown at its own zoom.
             ApplySiteZoom();
 
+            // Google's own pages say who the profile is signed in as; the start
+            // page's account chip is filled in from there.
+            ProbeGoogleAccount();
+
             // A sheet that was asked for before the page existed can open now.
             if (_openHomeCustomizerPending)
             {
@@ -784,6 +788,51 @@ namespace SimpleBrowser
                 StatusTextChanged(this, "Status: " + e.WebErrorStatus.ToString());
             }
             if (StateChanged != null) StateChanged(this);
+        }
+
+        /// <summary>
+        /// Reads the account Google is showing on its own pages, and refreshes
+        /// the signed-in state from the profile's cookies. Only Google and
+        /// YouTube pages are looked at, and only for what they already display.
+        /// </summary>
+        private void ProbeGoogleAccount()
+        {
+            var core = _webView.CoreWebView2;
+            if (core == null || !IsGoogleHost(core.Source)) return;
+
+            CaptureGoogleAccountAsync(core);
+        }
+
+        private async void CaptureGoogleAccountAsync(CoreWebView2 core)
+        {
+            try
+            {
+                string raw = await core.ExecuteScriptAsync(GoogleAccount.CaptureScript);
+                GoogleAccount.Capture(raw);
+                await GoogleAccount.RefreshAsync(core);
+            }
+            catch
+            {
+                // A page that has gone away has nothing to report.
+            }
+        }
+
+        private static bool IsGoogleHost(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+
+            try
+            {
+                string host = new Uri(url).Host;
+                return host.Equals("google.com", StringComparison.OrdinalIgnoreCase)
+                    || host.EndsWith(".google.com", StringComparison.OrdinalIgnoreCase)
+                    || host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase)
+                    || host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void OnSourceChanged(object sender, CoreWebView2SourceChangedEventArgs e)

@@ -23,6 +23,7 @@ namespace SimpleBrowser
             Dpi.Init();
             EnsureModernBrowserEmulation();
             AppMigration.Migrate();
+            GoogleAccount.Load();
 
             var launch = BrowserLaunch.Parse(args);
 
