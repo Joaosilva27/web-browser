@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace SimpleBrowser
@@ -117,6 +118,76 @@ namespace SimpleBrowser
         {
             base.OnLoad(e);
             Region = Theme.RoundedRegion(ClientRectangle, Dpi.Px(14));
+        }
+
+        // Chromium blanks the pointer while the engine's own permission bubble
+        // would be on screen, and the card stands in for that bubble. So the
+        // pointer is put back as soon as it goes missing while the card is up,
+        // and once more on the way out, when the engine lets go of it.
+        private const int CursorShowing = 0x00000001;
+        private const int ArrowCursor = 32512;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CursorPoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CursorInfo
+        {
+            public int Size;
+            public int Flags;
+            public IntPtr Handle;
+            public CursorPoint Position;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorInfo(ref CursorInfo info);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr LoadCursor(IntPtr instance, int name);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetCursor(IntPtr cursor);
+
+        private Timer _pointerTimer;
+
+        private static void KeepPointerVisible()
+        {
+            var info = new CursorInfo();
+            info.Size = Marshal.SizeOf(typeof(CursorInfo));
+
+            if (!GetCursorInfo(ref info)) return;
+            if ((info.Flags & CursorShowing) != 0) return;
+
+            SetCursor(LoadCursor(IntPtr.Zero, ArrowCursor));
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+
+            KeepPointerVisible();
+
+            _pointerTimer = new Timer();
+            _pointerTimer.Interval = 200;
+            _pointerTimer.Tick += delegate { KeepPointerVisible(); };
+            _pointerTimer.Start();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (_pointerTimer != null)
+            {
+                _pointerTimer.Stop();
+                _pointerTimer.Dispose();
+                _pointerTimer = null;
+            }
+
+            base.OnFormClosed(e);
+            KeepPointerVisible();
         }
 
         protected override CreateParams CreateParams
