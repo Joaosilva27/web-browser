@@ -441,6 +441,7 @@ namespace SimpleBrowser
     }
 
     .field {
+        position: relative;
         display: flex;
         align-items: center;
         gap: 3px;
@@ -451,6 +452,7 @@ namespace SimpleBrowser
         border-radius: 8px;
         background: var(--field);
         border: 1px solid transparent;
+        overflow: hidden;
         transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
     }
     .field:hover { background: var(--field-hover); }
@@ -538,6 +540,22 @@ namespace SimpleBrowser
     .url::placeholder { color: var(--text3); }
     .field.focused .url { display: block; }
     .field.focused .url-display { display: none; }
+
+    /* The grey type-ahead tail that follows the caret, fed by the host from
+       the first page address that starts with what was typed. */
+    .url-ghost {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        overflow: hidden;
+        display: none;
+        white-space: pre;
+        font-size: 12.8px;
+        letter-spacing: -0.008em;
+        color: var(--text3);
+        opacity: 0.75;
+        pointer-events: none;
+    }
 
     .star {
         width: 22px;
@@ -992,7 +1010,7 @@ namespace SimpleBrowser
     if (window.chrome && window.chrome.webview) {
         window.chrome.webview.addEventListener('message', function (e) {
             var m = e.data;
-            if (m && m.action === 'focus_url') { focusUrl(); }
+            if (m && m.action === 'focus_url') { focusUrl(m.newtab === true); }
             if (m && m.action === 'focus_chrome') {
                 // The view itself only takes focus a moment after the host
                 // asks, so the ring is applied on the next turn.
@@ -1072,11 +1090,14 @@ namespace SimpleBrowser
         }
     }
 
-    function focusUrl() {
+    function focusUrl(fromNewTab) {
         field.classList.add('focused');
+        hideGhost();
         urlInput.value = currentUrl === 'about:home' ? '' : currentUrl;
         urlInput.focus();
         urlInput.select();
+        var at = fieldBox();
+        post('url_input', { text: urlInput.value, x: at.x, y: at.y, w: at.w, empty: fromNewTab === true });
     }
 
     function fieldBox() {
@@ -1101,14 +1122,97 @@ namespace SimpleBrowser
 
     urlInput.addEventListener('blur', function () {
         field.classList.remove('focused');
+        hideGhost();
         urlInput.value = '';
         renderUrl();
         post('blur_url');
     });
 
+    // ── Inline autocomplete ──────────────────────────────────────────────
+    // The host computes the grey tail that follows the caret: the rest of
+    // the first page address that begins with what was typed. Tab or the
+    // Right arrow takes it; fresh typing throws it away.
+    var ghostEl = document.createElement('span');
+    ghostEl.className = 'url-ghost';
+    field.appendChild(ghostEl);
+
+    var ruler = document.createElement('span');
+    ruler.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre;';
+    field.appendChild(ruler);
+
+    var ghostTyped = '';
+    var ghostRest = '';
+    var ghostBlocked = false;
+
+    function setGhost(typed, rest) {
+        ghostTyped = typed || '';
+        ghostRest = rest || '';
+
+        // The host answers an older keystroke while the user keeps typing;
+        // only keep a tail that still fits the field's current value.
+        if (ghostRest && ghostTyped
+            && urlInput.value.toLowerCase().indexOf(ghostTyped.toLowerCase()) !== 0) {
+            ghostTyped = '';
+            ghostRest = '';
+        }
+
+        if (!ghostRest || ghostBlocked) { hideGhost(); return; }
+        drawGhost();
+    }
+
+    function hideGhost() {
+        ghostEl.textContent = '';
+        ghostEl.style.display = 'none';
+    }
+
+    function drawGhost() {
+        if (!ghostRest || document.activeElement !== urlInput) { hideGhost(); return; }
+        if (!urlInput.value
+            || urlInput.value.toLowerCase().indexOf(ghostTyped.toLowerCase()) !== 0) {
+            hideGhost();
+            return;
+        }
+
+        var cs = getComputedStyle(urlInput);
+        ruler.style.fontFamily = cs.fontFamily;
+        ruler.style.fontSize = cs.fontSize;
+        ruler.style.fontWeight = cs.fontWeight;
+        ruler.style.letterSpacing = cs.letterSpacing;
+        ruler.textContent = urlInput.value;
+
+        // The tail starts where the caret sits, watching the field scroll a
+        // long address sideways, and is clipped at the input's right edge
+        // like the typed text is.
+        var left = urlInput.offsetLeft
+            + ruler.getBoundingClientRect().width
+            - urlInput.scrollLeft;
+        if (left >= urlInput.offsetLeft + urlInput.offsetWidth - 2) { hideGhost(); return; }
+
+        ghostEl.style.left = Math.round(left) + 'px';
+        ghostEl.style.right = Math.round(
+            field.clientWidth - urlInput.offsetLeft - urlInput.offsetWidth) + 'px';
+        ghostEl.textContent = ghostRest;
+        ghostEl.style.display = 'block';
+    }
+
+    function acceptGhost() {
+        if (ghostEl.style.display === 'none') { return false; }
+
+        var rest = ghostRest;
+        ghostBlocked = true;
+        hideGhost();
+
+        urlInput.value = urlInput.value + rest;
+        var at = fieldBox();
+        post('url_input', { text: urlInput.value, x: at.x, y: at.y, w: at.w });
+        return true;
+    }
+
     // Every keystroke asks the host for suggestions; the list itself is a
     // native window under the field, which is the only way out of this strip.
     urlInput.addEventListener('input', function () {
+        ghostBlocked = false;
+        hideGhost();
         var at = fieldBox();
         post('url_input', { text: urlInput.value, x: at.x, y: at.y, w: at.w });
     });
@@ -1120,6 +1224,7 @@ namespace SimpleBrowser
             if (value) { post('navigate', { url: value }); }
         } else if (e.key === 'Escape') {
             urlInput.value = '';
+            hideGhost();
             urlInput.blur();
             post('blur_url');
         } else if (e.key === 'ArrowDown') {
@@ -1128,6 +1233,14 @@ namespace SimpleBrowser
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             post('url_key', { key: 'up' });
+        } else if (e.key === 'Tab') {
+            // Tab takes the grey type-ahead while it is showing; with nothing
+            // to complete, Tab keeps its usual meaning.
+            if (acceptGhost()) { e.preventDefault(); }
+        } else if (e.key === 'ArrowRight') {
+            var atEnd = urlInput.selectionStart === urlInput.value.length
+                && urlInput.selectionEnd === urlInput.value.length;
+            if (atEnd && acceptGhost()) { e.preventDefault(); }
         }
     });
 
@@ -1554,12 +1667,17 @@ namespace SimpleBrowser
             layoutBar();
         },
 
-        focusUrl: function () {
-            focusUrl();
+        focusUrl: function (newTab) {
+            focusUrl(newTab === true);
+        },
+
+        setGhost: function (typed, rest) {
+            setGhost(typed, rest);
         },
 
         setInput: function (text) {
             urlInput.value = text || '';
+            hideGhost();
         },
 
         setPrivate: function (on) {

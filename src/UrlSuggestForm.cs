@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -14,6 +15,9 @@ namespace SimpleBrowser
         public string Detail;
         public string Url;
         public bool IsSearch;
+
+        /// <summary>The site icon as a data URL; null draws the letter tile.</summary>
+        public string IconDataUrl;
     }
 
     /// <summary>
@@ -31,6 +35,8 @@ namespace SimpleBrowser
         public event Action<SuggestEntry> Chosen;
 
         private readonly List<SuggestEntry> _entries = new List<SuggestEntry>();
+        private readonly Dictionary<string, Image> _icons =
+            new Dictionary<string, Image>(StringComparer.Ordinal);
         private int _highlight = -1;
         private bool _shown;
 
@@ -124,6 +130,17 @@ namespace SimpleBrowser
         /// <summary>True while the list is on screen.</summary>
         public bool IsShown { get { return _shown; } }
 
+        protected override void Dispose(bool disposing)
+        {
+            foreach (var pair in _icons)
+            {
+                if (pair.Value != null) pair.Value.Dispose();
+            }
+            _icons.Clear();
+
+            base.Dispose(disposing);
+        }
+
         private static readonly IntPtr HwndTopmost = new IntPtr(-1);
         private const int SwpNoSize = 0x0001;
         private const int SwpNoMove = 0x0002;
@@ -146,7 +163,9 @@ namespace SimpleBrowser
             }
 
             int pad = Dpi.Px(14);
-            int textWidth = Width - pad * 2;
+            int iconSize = Dpi.Px(24);
+            int textLeft = pad + iconSize + Dpi.Px(9);
+            int textWidth = Width - textLeft - pad;
 
             using (var titleFont = new Font("Segoe UI", 9.25F))
             using (var boldFont = new Font("Segoe UI", 9.25F, FontStyle.Bold))
@@ -170,24 +189,28 @@ namespace SimpleBrowser
                         }
                     }
 
+                    int iconY = top + (RowHeight - iconSize) / 2;
                     SuggestEntry entry = _entries[i];
 
                     if (entry.IsSearch)
                     {
+                        DrawSearchGlyph(g, pad, iconY, iconSize);
                         TextRenderer.DrawText(g, entry.Title, boldFont,
-                            new Rectangle(pad, top, textWidth, RowHeight),
+                            new Rectangle(textLeft, top, textWidth, RowHeight),
                             Theme.TextPrimary,
                             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                         continue;
                     }
 
+                    DrawRowIcon(g, entry, pad, iconY, iconSize, boldFont);
+
                     TextRenderer.DrawText(g, entry.Title, titleFont,
-                        new Rectangle(pad, top + Dpi.Px(5), textWidth, Dpi.Px(20)),
+                        new Rectangle(textLeft, top + Dpi.Px(5), textWidth, Dpi.Px(20)),
                         Theme.TextPrimary,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                     TextRenderer.DrawText(g, entry.Detail, detailFont,
-                        new Rectangle(pad, top + Dpi.Px(24), textWidth, Dpi.Px(17)),
+                        new Rectangle(textLeft, top + Dpi.Px(24), textWidth, Dpi.Px(17)),
                         Theme.TextTertiary,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 }
@@ -244,6 +267,128 @@ namespace SimpleBrowser
             }
 
             base.OnMouseDown(e);
+        }
+
+        /// <summary>
+        /// The round face each row wears: the site's own icon when one was
+        /// seen, otherwise the first letter on a coloured tile, matching what
+        /// the tab strip shows when a page has no picture.
+        /// </summary>
+        private void DrawRowIcon(Graphics g, SuggestEntry entry, int x, int y, int size, Font letterFont)
+        {
+            Image icon = LookupIcon(entry);
+            if (icon != null)
+            {
+                InterpolationMode saved = g.InterpolationMode;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(icon, x + Dpi.Px(2), y + Dpi.Px(2), size - Dpi.Px(4), size - Dpi.Px(4));
+                g.InterpolationMode = saved;
+                return;
+            }
+
+            string host = HostOf(entry.Url);
+            if (string.IsNullOrEmpty(host) && !string.IsNullOrEmpty(entry.Title))
+            {
+                host = entry.Title;
+            }
+            if (string.IsNullOrEmpty(host)) host = "?";
+            string letter = host.Substring(0, 1).ToUpperInvariant();
+
+            using (var path = RoundedPath(new Rectangle(x, y, size, size), size / 2))
+            using (var brush = new SolidBrush(ChipColor(host)))
+            {
+                g.FillPath(brush, path);
+            }
+
+            TextRenderer.DrawText(g, letter, letterFont, new Rectangle(x, y, size, size),
+                Color.White,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        }
+
+        /// <summary>Decodes an entry's data URL once, then serves it from cache.</summary>
+        private Image LookupIcon(SuggestEntry entry)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.IconDataUrl)) return null;
+
+            Image cached;
+            if (_icons.TryGetValue(entry.IconDataUrl, out cached)) return cached;
+
+            Image decoded = null;
+            int comma = entry.IconDataUrl.IndexOf(',');
+            if (comma >= 0)
+            {
+                try
+                {
+                    byte[] bytes = Convert.FromBase64String(entry.IconDataUrl.Substring(comma + 1));
+                    // The stream has to stay open while GDI+ reads, so the
+                    // decoded image is copied straight into a bitmap instead.
+                    using (var memory = new MemoryStream(bytes))
+                    using (var source = Image.FromStream(memory))
+                    {
+                        decoded = new Bitmap(source);
+                    }
+                }
+                catch
+                {
+                    decoded = null;
+                }
+            }
+
+            _icons[entry.IconDataUrl] = decoded;
+            return decoded;
+        }
+
+        /// <summary>A magnifier for the search row, drawn in the same slot the
+        /// site icons use, so every entry starts with a picture.</summary>
+        private void DrawSearchGlyph(Graphics g, int x, int y, int size)
+        {
+            int box = Dpi.Px(16);
+            int cx = x + (size - box) / 2;
+            int cy = y + (size - box) / 2;
+            int glass = box * 2 / 3;
+
+            using (var pen = new Pen(Theme.TextTertiary, Math.Max(1f, Dpi.Px(1.4f))))
+            {
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+
+                g.DrawEllipse(pen, cx, cy, glass, glass);
+                g.DrawLine(pen,
+                    cx + glass - box / 10, cy + glass - box / 10,
+                    cx + box, cy + box);
+            }
+        }
+
+        private static string HostOf(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return null;
+
+            Uri parsed;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out parsed)) return null;
+
+            string host = parsed.Host;
+            if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) host = host.Substring(4);
+            return host.Length > 0 ? host : null;
+        }
+
+        /// <summary>The same colour roll the start page tiles use.</summary>
+        private static readonly string[] Palette =
+        {
+            "#007aff", "#34c759", "#ff9500", "#ff3b30", "#af52de",
+            "#5856d6", "#5ac8fa", "#ff2d55", "#30b0c7", "#8e8e93"
+        };
+
+        private static Color ChipColor(string text)
+        {
+            if (string.IsNullOrEmpty(text)) text = "a";
+
+            int hash = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                hash = (hash * 31 + text[i]) & 0xffff;
+            }
+
+            return ColorTranslator.FromHtml(Palette[hash % Palette.Length]);
         }
 
         private static GraphicsPath RoundedPath(Rectangle bounds, int radius)

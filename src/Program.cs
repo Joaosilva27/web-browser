@@ -24,6 +24,7 @@ namespace SimpleBrowser
             EnsureModernBrowserEmulation();
             AppMigration.Migrate();
             GoogleAccount.Load();
+            FaviconStore.Load();
 
             var launch = BrowserLaunch.Parse(args);
 

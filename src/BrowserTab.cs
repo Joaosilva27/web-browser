@@ -20,6 +20,7 @@ namespace SimpleBrowser
         private bool _isHome;
         private bool _openHomeCustomizerPending;
         private bool _focusSearchWhenReady;
+        private bool _focusChromeWhenReady;
         private bool _isSettings;
         private bool _privateMode;
 
@@ -36,6 +37,12 @@ namespace SimpleBrowser
         public event Action<BrowserTab, string> StatusTextChanged;
         public event Action<BrowserTab> IconChanged;
         public event Action<BrowserTab> AudioChanged;
+
+        /// <summary>
+        /// Raised when a fresh tab has its first page, which is the moment the
+        /// address bar can take the keyboard for it.
+        /// </summary>
+        public event Action<BrowserTab> FocusChromeRequested;
 
         /// <summary>Raised when the page's process dies, so the host can offer a reload.</summary>
         public event Action<BrowserTab> CrashReported;
@@ -308,6 +315,23 @@ namespace SimpleBrowser
             if (TitleChanged != null) TitleChanged(this, "New Tab");
             if (UrlChanged != null) UrlChanged(this, "");
             if (StateChanged != null) StateChanged(this);
+        }
+
+        /// <summary>
+        /// Asks for the chrome's address bar once this tab is live. A brand
+        /// new tab starts with the caret in the omnibox, the way every serious
+        /// browser does it, ready to type.
+        /// </summary>
+        public void RequestChromeFocus()
+        {
+            if (_isInitialized && _webView.CoreWebView2 != null && FocusChromeRequested != null)
+            {
+                FocusChromeRequested(this);
+            }
+            else
+            {
+                _focusChromeWhenReady = true;
+            }
         }
 
         /// <summary>
@@ -816,6 +840,16 @@ namespace SimpleBrowser
             // page's account chip is filled in from there.
             ProbeGoogleAccount();
 
+            // A new tab asked for the address bar before the engine was ready.
+            // It beats the page's own search box: the caret belongs to whatever
+            // the user is about to type, and that is the omnibox first.
+            if (_focusChromeWhenReady)
+            {
+                _focusChromeWhenReady = false;
+                _focusSearchWhenReady = false;
+                if (FocusChromeRequested != null) FocusChromeRequested(this);
+            }
+
             // A new tab asked for its search box before the engine was ready;
             // it is one keystroke from a search now.
             if (_focusSearchWhenReady)
@@ -1039,6 +1073,12 @@ namespace SimpleBrowser
                         if (bytes.Length == 0) return;
 
                         FaviconDataUrl = "data:image/png;base64," + Convert.ToBase64String(bytes);
+
+                        // A page gives its address bar face to the host cache
+                        // too, so history suggestions can show the same icon.
+                        // Private windows keep that to themselves.
+                        if (!_privateMode) FaviconStore.Remember(CurrentUrl, FaviconDataUrl);
+
                         if (IconChanged != null) IconChanged(this);
                     }
                 }

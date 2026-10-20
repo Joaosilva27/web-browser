@@ -444,7 +444,7 @@ namespace SimpleBrowser
                         OpenSettings();
                         break;
                     case "focus_url":
-                        FocusUrlBar();
+                        FocusUrlBar(false);
                         break;
                     case "url_input":
                         {
@@ -453,7 +453,8 @@ namespace SimpleBrowser
                                 Json.GetString(fields, "text"),
                                 Json.GetInt(fields, "x", -1),
                                 Json.GetInt(fields, "y", -1),
-                                Json.GetInt(fields, "w", 0));
+                                Json.GetInt(fields, "w", 0),
+                                Json.GetBool(fields, "empty", false));
                             break;
                         }
                     case "url_key":
@@ -567,14 +568,17 @@ namespace SimpleBrowser
             tab.PermissionRequested += OnTabPermissionRequested;
             tab.ContextMenuRequested += OnTabContextMenuRequested;
             tab.AcceleratorPressed += OnTabAcceleratorPressed;
+            tab.FocusChromeRequested += OnTabFocusChromeRequested;
 
             if (index < 0 || index > _tabControl.TabPages.Count) index = _tabControl.TabPages.Count;
             _tabControl.TabPages.Insert(index, tab);
             _tabControl.SelectedTab = tab;
 
-            // An empty new tab hands the keyboard to its search box right away;
-            // a tab that opens a page keeps the caret wherever it was.
-            if (string.IsNullOrEmpty(url)) tab.FocusHomeSearch();
+            // A brand new tab hands the keyboard to the address bar, the way
+            // every serious browser does: it is ready to type before anything
+            // is typed, with its suggestions already underneath. A tab that
+            // opens a page keeps the caret wherever it was.
+            if (string.IsNullOrEmpty(url)) tab.RequestChromeFocus();
 
             if (!_privateMode) SessionStore.Touch();
             SyncAllToChrome();
@@ -1593,6 +1597,16 @@ namespace SimpleBrowser
         }
 
         /// <summary>
+        /// A fresh tab finished loading, so the address bar can finally take
+        /// the keyboard for it. Only the tab in front may ask: one still
+        /// loading in the background must never steal the caret.
+        /// </summary>
+        private void OnTabFocusChromeRequested(BrowserTab tab)
+        {
+            if (tab != null && ReferenceEquals(tab, ActiveTab)) FocusUrlBar(true);
+        }
+
+        /// <summary>
         /// Popups and new windows. Requests with explicit window features — the
         /// kind OAuth and "Sign in with Google" flows use — become real popup
         /// windows so they can post back to their opener. Plain target="_blank"
@@ -2359,7 +2373,7 @@ namespace SimpleBrowser
             }));
         }
 
-        private void FocusUrlBar()
+        private void FocusUrlBar(bool openTopSites)
         {
             // Defer: moving focus during PreFilterMessage can be undone by the
             // control that still owns the key message.
@@ -2368,9 +2382,10 @@ namespace SimpleBrowser
                 if (_chromeWebView.CoreWebView2 == null) return;
 
                 _chromeWebView.Focus();
-                _chromeWebView.CoreWebView2.PostWebMessageAsJson("{\"action\":\"focus_url\"}");
+                _chromeWebView.CoreWebView2.PostWebMessageAsJson(
+                    "{\"action\":\"focus_url\",\"newtab\":" + (openTopSites ? "true" : "false") + "}");
                 _chromeWebView.CoreWebView2.ExecuteScriptAsync(
-                    "window.BraveAPI && window.BraveAPI.focusUrl();");
+                    "window.BraveAPI && window.BraveAPI.focusUrl(" + (openTopSites ? "true" : "false") + ");");
             }));
         }
 
@@ -2403,8 +2418,10 @@ namespace SimpleBrowser
         /// <summary>
         /// Builds the list that hangs under the address bar: the search first,
         /// then the pages the user has visited, saved or pinned that match.
+        /// With nothing typed yet it offers the sites the browser would point
+        /// at anyway, when the field was opened from a fresh tab.
         /// </summary>
-        private void ShowSuggestions(string text, int cssX, int cssY, int cssWidth)
+        private void ShowSuggestions(string text, int cssX, int cssY, int cssWidth, bool openOnEmpty)
         {
             _suggestTyped = text ?? "";
 
@@ -2413,21 +2430,41 @@ namespace SimpleBrowser
             if (cssWidth > 0) _suggestW = cssWidth;
 
             string needle = _suggestTyped.Trim();
+
+            List<SuggestEntry> entries;
             if (needle.Length == 0)
             {
-                HideSuggestions();
-                return;
+                entries = openOnEmpty ? TopSuggestions() : null;
+                if (entries == null || entries.Count == 0)
+                {
+                    HideSuggestions();
+                    return;
+                }
             }
-
-            var entries = BuildSuggestions(needle);
-            if (entries.Count == 0)
+            else
             {
-                HideSuggestions();
-                return;
+                entries = BuildSuggestions(needle);
+                if (entries.Count == 0)
+                {
+                    HideSuggestions();
+                    return;
+                }
             }
 
             _suggestEntries = entries;
             _suggestIndex = -1;
+
+            // The grey type-ahead that follows the caret: taken from the first
+            // page address that starts with what was typed. The search row
+            // never completes — words, not addresses, belong there.
+            string ghost = null;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].IsSearch) continue;
+                ghost = GhostRemainder(entries[i].Url, _suggestTyped);
+                if (!string.IsNullOrEmpty(ghost)) break;
+            }
+            SendGhost(ghost);
 
             if (_suggest == null || _suggest.IsDisposed)
             {
@@ -2490,6 +2527,77 @@ namespace SimpleBrowser
 
             _suggestEntries = null;
             _suggestIndex = -1;
+            SendGhost(null);
+        }
+
+        /// <summary>
+        /// Tells the chrome what grey tail should follow the caret: the
+        /// remainder of the first page address that starts with what was
+        /// typed. Nothing to say clears whatever is on screen.
+        /// </summary>
+        private void SendGhost(string remainder)
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                "window.BraveAPI && window.BraveAPI.setGhost(" +
+                Json.Write(_suggestTyped ?? string.Empty) + "," +
+                Json.Write(remainder ?? string.Empty) + ");");
+        }
+
+        /// <summary>
+        /// The field shows places without their scheme — and usually without
+        /// "www." — so the type-ahead is measured against that shorter
+        /// spelling. A paste that carried the scheme still completes against
+        /// the raw address.
+        /// </summary>
+        private static string GhostRemainder(string url, string typed)
+        {
+            if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(typed)) return null;
+
+            if (url.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+            {
+                return url.Substring(typed.Length);
+            }
+
+            string display = url;
+            if (display.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) display = display.Substring(8);
+            else if (display.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) display = display.Substring(7);
+            if (display.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) display = display.Substring(4);
+
+            return display.StartsWith(typed, StringComparison.OrdinalIgnoreCase)
+                ? display.Substring(typed.Length)
+                : null;
+        }
+
+        /// <summary>
+        /// What a bare address field offers before anything is typed: the
+        /// pages visited most recently, then the saved ones. Eight rows are
+        /// plenty to say "this is where you usually go".
+        /// </summary>
+        private List<SuggestEntry> TopSuggestions()
+        {
+            var entries = new List<SuggestEntry>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in _historyManager.GetHistory())
+            {
+                if (entries.Count >= 8) break;
+                if (string.IsNullOrEmpty(item.Url)) continue;
+                if (item.Url.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) continue;
+                if (item.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!seen.Add(item.Url)) continue;
+                entries.Add(PageEntry(item.Title, item.Url, FaviconStore.For(item.Url)));
+            }
+
+            foreach (var bookmark in _bookmarkManager.GetBookmarks())
+            {
+                if (entries.Count >= 8) break;
+                if (string.IsNullOrEmpty(bookmark.Url) || !seen.Add(bookmark.Url)) continue;
+                entries.Add(PageEntry(bookmark.Title, bookmark.Url, bookmark.Icon));
+            }
+
+            return entries;
         }
 
         private void AcceptSuggestion(SuggestEntry entry)
@@ -2521,7 +2629,7 @@ namespace SimpleBrowser
                 if (entries.Count >= 8) break;
                 if (!Matches(needle, item.Title, item.Url)) continue;
                 if (!seen.Add(item.Url)) continue;
-                entries.Add(PageEntry(item.Title, item.Url));
+                entries.Add(PageEntry(item.Title, item.Url, FaviconStore.For(item.Url)));
             }
 
             foreach (var bookmark in _bookmarkManager.GetBookmarks())
@@ -2529,7 +2637,7 @@ namespace SimpleBrowser
                 if (entries.Count >= 8) break;
                 if (!Matches(needle, bookmark.Title, bookmark.Url)) continue;
                 if (!seen.Add(bookmark.Url)) continue;
-                entries.Add(PageEntry(bookmark.Title, bookmark.Url));
+                entries.Add(PageEntry(bookmark.Title, bookmark.Url, bookmark.Icon ?? FaviconStore.For(bookmark.Url)));
             }
 
             foreach (var favorite in FavoritesStore.Current.GetFavorites())
@@ -2537,18 +2645,27 @@ namespace SimpleBrowser
                 if (entries.Count >= 8) break;
                 if (!Matches(needle, favorite.Title, favorite.Url)) continue;
                 if (!seen.Add(favorite.Url)) continue;
-                entries.Add(PageEntry(favorite.Title, favorite.Url));
+                entries.Add(PageEntry(favorite.Title, favorite.Url, favorite.Icon ?? FaviconStore.For(favorite.Url)));
             }
 
             return entries;
         }
 
-        private static SuggestEntry PageEntry(string title, string url)
+        /// <summary>
+        /// A plain "place I have been" row. The icon travels with it — the
+        /// saved one for bookmarks, the host cache for the rest — though only
+        /// data URLs survive here: anything else would mean a web trip the
+        /// suggestion list does not wait for.
+        /// </summary>
+        private static SuggestEntry PageEntry(string title, string url, string icon)
         {
             var entry = new SuggestEntry();
             entry.Url = url;
             entry.Title = string.IsNullOrEmpty(title) ? url : title;
             entry.Detail = url;
+            entry.IconDataUrl = icon != null && icon.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                ? icon
+                : null;
             return entry;
         }
 
@@ -2843,7 +2960,7 @@ namespace SimpleBrowser
                 case "new_private_window": NewWindow(true); break;
                 case "reopen_tab": ReopenClosedTab(); break;
                 case "close_tab": CloseTabAt(_tabControl.SelectedIndex); break;
-                case "focus_url": FocusUrlBar(); break;
+                case "focus_url": FocusUrlBar(false); break;
                 case "reload": if (ActiveTab != null) ActiveTab.Reload(); break;
                 case "bookmark": ToggleBookmarkCurrent(); break;
                 case "history": ShowHistory(); break;
