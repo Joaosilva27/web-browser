@@ -572,6 +572,10 @@ namespace SimpleBrowser
             _tabControl.TabPages.Insert(index, tab);
             _tabControl.SelectedTab = tab;
 
+            // An empty new tab hands the keyboard to its search box right away;
+            // a tab that opens a page keeps the caret wherever it was.
+            if (string.IsNullOrEmpty(url)) tab.FocusHomeSearch();
+
             if (!_privateMode) SessionStore.Touch();
             SyncAllToChrome();
         }

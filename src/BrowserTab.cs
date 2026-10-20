@@ -19,6 +19,7 @@ namespace SimpleBrowser
         private bool _isLoading;
         private bool _isHome;
         private bool _openHomeCustomizerPending;
+        private bool _focusSearchWhenReady;
         private bool _isSettings;
         private bool _privateMode;
 
@@ -290,6 +291,10 @@ namespace SimpleBrowser
             Text = "New Tab";
             FaviconDataUrl = null;
 
+            // The box is empty and the caret goes to the search, whether this
+            // start page is for a new tab or the Home button's destination.
+            _focusSearchWhenReady = true;
+
             if (_isInitialized && _webView.CoreWebView2 != null)
             {
                 _webView.NavigateToString(HomePage.GetHtml(Theme.IsDark));
@@ -322,6 +327,41 @@ namespace SimpleBrowser
             catch
             {
                 // A tab that is going away can refuse; nothing to redraw.
+            }
+        }
+
+        /// <summary>
+        /// Puts the keyboard straight into the start page's search box, so a new
+        /// tab is one keystroke away from a search. The WebView may still be
+        /// spinning up; if it is, the request is kept and honoured the moment
+        /// the page is there.
+        /// </summary>
+        public void FocusHomeSearch()
+        {
+            if (_isHome && _isInitialized && _webView.CoreWebView2 != null)
+            {
+                FocusHomeSearchNow();
+            }
+            else
+            {
+                _focusSearchWhenReady = true;
+            }
+        }
+
+        private void FocusHomeSearchNow()
+        {
+            try
+            {
+                // The page's caret only matters once the control itself has the
+                // keyboard; otherwise the typing lands in the omnibox instead.
+                _webView.Focus();
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "setTimeout(function(){var i=document.getElementById('search-input');" +
+                    "if(i&&!i.disabled)i.focus();},0);");
+            }
+            catch
+            {
+                // A tab that is going away cannot take a caret.
             }
         }
 
@@ -775,6 +815,14 @@ namespace SimpleBrowser
             // Google's own pages say who the profile is signed in as; the start
             // page's account chip is filled in from there.
             ProbeGoogleAccount();
+
+            // A new tab asked for its search box before the engine was ready;
+            // it is one keystroke from a search now.
+            if (_focusSearchWhenReady)
+            {
+                _focusSearchWhenReady = false;
+                if (_isHome) FocusHomeSearchNow();
+            }
 
             // A sheet that was asked for before the page existed can open now.
             if (_openHomeCustomizerPending)
