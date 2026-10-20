@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace SimpleBrowser
 {
@@ -42,6 +44,74 @@ namespace SimpleBrowser
                 }
 
                 return _initialization;
+            }
+        }
+
+        /// <summary>
+        /// Controller options for a tab or a window. A private window is given
+        /// an in-private profile, which WebView2 keeps in memory only, so the
+        /// sign-in cookies and history it collects are gone with the window.
+        /// A normal window needs no options at all.
+        /// </summary>
+        public static CoreWebView2ControllerOptions CreateOptions(CoreWebView2Environment environment, bool privateMode)
+        {
+            if (environment == null || !privateMode) return null;
+
+            try
+            {
+                var options = environment.CreateCoreWebView2ControllerOptions();
+                options.IsInPrivateModeEnabled = true;
+                return options;
+            }
+            catch
+            {
+                // An older runtime without private profiles falls back to the
+                // shared one rather than refusing to open the window.
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Makes sure a WebView2 is built on the right profile: an in-private
+        /// one for a private window, the shared persistent one otherwise.
+        /// </summary>
+        public static async Task InitializeAsync(WebView2 view, bool privateMode)
+        {
+            var environment = await GetAsync();
+            var options = CreateOptions(environment, privateMode);
+
+            if (options == null) await view.EnsureCoreWebView2Async(environment);
+            else await view.EnsureCoreWebView2Async(environment, options);
+        }
+
+        /// <summary>
+        /// The controller behind a WinForms WebView2 control.
+        ///
+        /// The control keeps its controller private, and the controller is the
+        /// only place the accelerator-key event exists. Without it Aura could not
+        /// answer Ctrl+F or Ctrl+T while a page has focus: the keys never reach
+        /// the application's message filter, because the engine consumes them
+        /// first. The SDK is fixed at the version in lib, so the field is stable;
+        /// if a future runtime renames it, this returns null and the engine's own
+        /// shortcut handling simply stays in charge.
+        /// </summary>
+        public static CoreWebView2Controller ControllerOf(WebView2 view)
+        {
+            if (view == null) return null;
+
+            try
+            {
+                FieldInfo field = typeof(WebView2).GetField(
+                    "_coreWebView2Controller",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+
+                if (field == null) return null;
+
+                return field.GetValue(view) as CoreWebView2Controller;
+            }
+            catch
+            {
+                return null;
             }
         }
 

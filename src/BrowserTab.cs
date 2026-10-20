@@ -19,6 +19,7 @@ namespace SimpleBrowser
         private bool _isHome;
         private bool _openHomeCustomizerPending;
         private bool _isSettings;
+        private bool _privateMode;
 
         public event Action<BrowserTab, string> UrlChanged;
         public event Action<BrowserTab, string> TitleChanged;
@@ -34,19 +35,37 @@ namespace SimpleBrowser
         /// <summary>Raised when the page enters or leaves its own fullscreen (video, slides).</summary>
         public event Action<BrowserTab, bool> FullScreenChanged;
 
+        /// <summary>Raised when the page starts a download, so the host can run it.</summary>
+        public event Action<BrowserTab, CoreWebView2DownloadStartingEventArgs> DownloadStarting;
+
+        /// <summary>Raised when a page asks for a permission such as the camera.</summary>
+        public event Action<BrowserTab, CoreWebView2PermissionRequestedEventArgs> PermissionRequested;
+
+        /// <summary>Raised when the page asks for a context menu.</summary>
+        public event Action<BrowserTab, CoreWebView2ContextMenuRequestedEventArgs> ContextMenuRequested;
+
+        /// <summary>
+        /// A browser key was pressed in the page. The host answers it, so the
+        /// engine's own handling is switched off in ApplyAppSettings.
+        /// </summary>
+        public event Action<BrowserTab, int, CoreWebView2AcceleratorKeyPressedEventArgs> AcceleratorPressed;
+
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
         public string DisplayTitle { get; private set; }
         public string FaviconDataUrl { get; private set; }
         public bool IsLoading { get { return _isLoading; } }
+        /// <summary>True when this tab lives in a private window.</summary>
+        public bool IsPrivate { get { return _privateMode; } }
         public bool CanGoBack { get { return _webView != null && _isInitialized && _webView.CanGoBack; } }
         public bool CanGoForward { get { return _webView != null && _isInitialized && _webView.CanGoForward; } }
 
-        public BrowserTab(string initialUrl = null)
+        public BrowserTab(string initialUrl = null, bool privateMode = false)
         {
             Text = "New Tab";
             DisplayTitle = "New Tab";
             BackColor = Theme.ContentBackground;
+            _privateMode = privateMode;
 
             _webView = new WebView2();
             _webView.Dock = DockStyle.Fill;
@@ -63,8 +82,7 @@ namespace SimpleBrowser
         {
             try
             {
-                var env = await BrowserEnvironment.GetAsync();
-                await _webView.EnsureCoreWebView2Async(env);
+                await BrowserEnvironment.InitializeAsync(_webView, _privateMode);
 
                 _isInitialized = true;
 
@@ -100,6 +118,12 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
                 _webView.CoreWebView2.WindowCloseRequested += OnWindowCloseRequested;
                 _webView.CoreWebView2.ContainsFullScreenElementChanged += OnContainsFullScreenElementChanged;
+                _webView.CoreWebView2.DownloadStarting += OnDownloadStarting;
+                _webView.CoreWebView2.PermissionRequested += OnPermissionRequested;
+                _webView.CoreWebView2.ContextMenuRequested += OnContextMenuRequested;
+
+                var controller = BrowserEnvironment.ControllerOf(_webView);
+                if (controller != null) controller.AcceleratorKeyPressed += OnAcceleratorKeyPressed;
 
                 if (!string.IsNullOrEmpty(_pendingUrl))
                 {
@@ -295,6 +319,44 @@ namespace SimpleBrowser
             catch
             {
                 // The page may be gone; nothing to do.
+            }
+        }
+
+        /// <summary>
+        /// Shows or hides Aura's own find bar on the page. Finding is left to
+        /// the script, which owns the bar and its match counts.
+        /// </summary>
+        public void ToggleFind()
+        {
+            if (!_isInitialized || _webView == null || _webView.CoreWebView2 == null) return;
+            if (_isHome || _isSettings) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(FindBar.Script());
+            }
+            catch
+            {
+                // The page may be gone; nothing to search.
+            }
+        }
+
+        /// <summary>
+        /// Runs a small script in the page on the user's behalf, used for the
+        /// clipboard actions on the page's own context menu.
+        /// </summary>
+        public void RunScript(string script)
+        {
+            if (!_isInitialized || _webView == null || _webView.CoreWebView2 == null) return;
+            if (string.IsNullOrEmpty(script)) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(script);
+            }
+            catch
+            {
+                // The page may be gone.
             }
         }
 
@@ -614,6 +676,44 @@ namespace SimpleBrowser
         private void OnWindowCloseRequested(object sender, object e)
         {
             if (WindowCloseRequested != null) WindowCloseRequested(this);
+        }
+
+        private void OnDownloadStarting(object sender, CoreWebView2DownloadStartingEventArgs e)
+        {
+            if (DownloadStarting != null) DownloadStarting(this, e);
+        }
+
+        private void OnPermissionRequested(object sender, CoreWebView2PermissionRequestedEventArgs e)
+        {
+            if (PermissionRequested != null)
+            {
+                PermissionRequested(this, e);
+                return;
+            }
+
+            // Nobody is listening, so follow the browser's usual rule: a page
+            // that was opened by the user may use what it asked for.
+            e.State = CoreWebView2PermissionState.Allow;
+            e.Handled = true;
+        }
+
+        private void OnContextMenuRequested(object sender, CoreWebView2ContextMenuRequestedEventArgs e)
+        {
+            var handler = ContextMenuRequested;
+            if (handler != null) handler(this, e);
+        }
+
+        private void OnAcceleratorKeyPressed(object sender, CoreWebView2AcceleratorKeyPressedEventArgs e)
+        {
+            var handler = AcceleratorPressed;
+            if (handler == null) return;
+
+            // Key-up carries no decision; answering only key-down keeps the
+            // host from acting twice on one press.
+            if (e.KeyEventKind != CoreWebView2KeyEventKind.KeyDown
+                && e.KeyEventKind != CoreWebView2KeyEventKind.SystemKeyDown) return;
+
+            handler(this, (int)e.VirtualKey, e);
         }
 
         /// <summary>

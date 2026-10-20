@@ -51,6 +51,9 @@ namespace SimpleBrowser
                 "showTiles", Settings.Current.ShowTiles,
                 "bookmarksBar", Settings.Current.ShowBookmarksBar,
                 "zoom", Settings.Current.Zoom,
+                "startup", Settings.Current.StartupMode,
+                "askDownloadPath", Settings.Current.AskDownloadPath,
+                "isDefault", DefaultBrowser.IsDefault(),
                 "ruleCount", AdBlocker.RuleCount,
                 "blockedCount", AdBlocker.BlockedCount,
                 "profilePath", BrowserEnvironment.UserDataFolder,
@@ -336,6 +339,7 @@ namespace SimpleBrowser
         <a href='#passwords'>Passwords</a>
         <a href='#start'>Start page</a>
         <a href='#browsing'>Browsing</a>
+        <a href='#permissions'>Site permissions</a>
         <a href='#data'>Data &amp; privacy</a>
         <a href='#about'>About</a>
     </nav>
@@ -456,6 +460,16 @@ namespace SimpleBrowser
         <div class='card'>
             <div class='row'>
                 <div class='label'>
+                    <div class='name'>On startup</div>
+                    <div class='hint'>Aura can reopen the tabs from last time, and always offers them back after a crash.</div>
+                </div>
+                <div class='seg' id='startup'>
+                    <button data-value='home'>Start page</button>
+                    <button data-value='continue'>Last session</button>
+                </div>
+            </div>
+            <div class='row'>
+                <div class='label'>
                     <div class='name'>Search from the new tab page</div>
                     <div class='hint'>The new tab search box uses the engine chosen above.</div>
                 </div>
@@ -468,10 +482,45 @@ namespace SimpleBrowser
             <div class='row'>
                 <div class='label'>
                     <div class='name'>Page zoom</div>
-                    <div class='hint'>Applies to every tab and to new windows.</div>
+                    <div class='hint'>Applies to every tab and to new windows. A single site can have its own zoom from the AA menu.</div>
                 </div>
                 <input type='range' min='50' max='200' step='10' data-key='zoom' />
                 <div class='zoom-value' id='zoom-value'>100%</div>
+            </div>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Ask where to save each file</div>
+                    <div class='hint'>Off means downloads go straight to your Downloads folder.</div>
+                </div>
+                <label class='switch'>
+                    <input type='checkbox' data-key='askDownloadPath' />
+                    <span class='track'></span>
+                </label>
+            </div>
+            <div class='row action'>
+                <div class='label'>
+                    <div class='name'>Default browser</div>
+                    <div class='hint' id='default-hint'>&ndash;</div>
+                </div>
+                <button class='act primary' data-open='defaultbrowser' id='default-btn'>Set as Default</button>
+            </div>
+        </div>
+
+        <h2 id='permissions'>Site permissions</h2>
+        <div class='card'>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Sites you have answered for</div>
+                    <div class='hint'>Aura asks before a site uses your camera, microphone, location and so on. Change an answer here, or put it back to asking.</div>
+                </div>
+                <button class='act' data-perm-clear='1'>Remove All</button>
+            </div>
+            <div id='perm-list'></div>
+            <div class='row' id='perm-empty'>
+                <div class='label'>
+                    <div class='name'>Nothing answered yet</div>
+                    <div class='hint'>Answers you give to a site's requests will be listed here.</div>
+                </div>
             </div>
         </div>
 
@@ -601,6 +650,92 @@ namespace SimpleBrowser
         }
     }
 
+    var startupSeg = document.getElementById('startup');
+    var startupButtons = startupSeg.querySelectorAll('button');
+    for (var u = 0; u < startupButtons.length; u++) {
+        if (startupButtons[u].getAttribute('data-value') === S.startup) {
+            startupButtons[u].classList.add('on');
+        }
+    }
+
+    if (S.isDefault) {
+        document.getElementById('default-hint').textContent = 'Aura is your default browser.';
+        var defaultBtn = document.getElementById('default-btn');
+        defaultBtn.textContent = 'Default';
+        defaultBtn.classList.remove('primary');
+        defaultBtn.disabled = true;
+    } else {
+        document.getElementById('default-hint').textContent =
+            'Opens links from other apps in Aura. Windows asks you to confirm.';
+    }
+
+    // ── The list of site permissions ───────────────────────────────────────
+    function auraPermissions(rows) {
+        var list = document.getElementById('perm-list');
+        var empty = document.getElementById('perm-empty');
+        list.innerHTML = '';
+
+        if (!rows || !rows.length) {
+            empty.style.display = '';
+            return;
+        }
+
+        empty.style.display = 'none';
+
+        for (var i = 0; i < rows.length; i++) {
+            (function (row) {
+                var line = document.createElement('div');
+                line.className = 'row';
+
+                var label = document.createElement('div');
+                label.className = 'label';
+
+                var name = document.createElement('div');
+                name.className = 'name';
+                name.textContent = row.kindLabel || row.kind;
+
+                var hint = document.createElement('div');
+                hint.className = 'hint';
+                hint.textContent = row.origin;
+
+                label.appendChild(name);
+                label.appendChild(hint);
+
+                var seg = document.createElement('div');
+                seg.className = 'seg';
+
+                var options = [['ask', 'Ask'], ['allow', 'Allow'], ['block', 'Block']];
+                for (var o = 0; o < options.length; o++) {
+                    (function (id, text) {
+                        var button = document.createElement('button');
+                        button.textContent = text;
+                        if (id === row.state) { button.classList.add('on'); }
+
+                        button.addEventListener('click', function () {
+                            var buttons = seg.querySelectorAll('button');
+                            for (var b = 0; b < buttons.length; b++) { buttons[b].classList.remove('on'); }
+                            button.classList.add('on');
+
+                            post({
+                                action: 'perm_set',
+                                origin: row.origin,
+                                kind: row.kind,
+                                state: id
+                            });
+                            flash();
+                        });
+
+                        seg.appendChild(button);
+                    })(options[o][0], options[o][1]);
+                }
+
+                line.appendChild(label);
+                line.appendChild(seg);
+                list.appendChild(line);
+            })(rows[i]);
+        }
+    }
+
     // ── React to changes ───────────────────────────────────────────────────
     for (var c = 0; c < boxes.length; c++) {
         boxes[c].addEventListener('change', function () {
@@ -634,6 +769,28 @@ namespace SimpleBrowser
         document.getElementById('engine-name').textContent = engineNameFrom(this.value);
         flash();
     });
+
+    startupSeg.addEventListener('click', function (e) {
+        var button = e.target.closest('button');
+        if (!button) return;
+
+        for (var t = 0; t < startupButtons.length; t++) {
+            startupButtons[t].classList.remove('on');
+        }
+        button.classList.add('on');
+
+        post({ action: 'set', key: 'startup', value: button.getAttribute('data-value') });
+        flash();
+    });
+
+    var permClear = document.querySelector('button[data-perm-clear]');
+    if (permClear) {
+        permClear.addEventListener('click', function () {
+            if (confirm('Put every site permission back to asking?')) {
+                post({ action: 'perm_clear' });
+            }
+        });
+    }
 
     zoom.addEventListener('input', function () {
         document.getElementById('zoom-value').textContent = this.value + '%';
@@ -695,6 +852,7 @@ namespace SimpleBrowser
     spy();
 
     post({ action: 'stats' });
+    post({ action: 'permissions' });
 </script>
 </body>
 </html>";

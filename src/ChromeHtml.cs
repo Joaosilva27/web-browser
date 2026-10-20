@@ -302,6 +302,36 @@ namespace SimpleBrowser
         stroke-linecap: round;
     }
 
+    /* A pill that marks a private window, so the two are never confused. */
+    .priv {
+        flex: none;
+        display: none;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        margin: 0 4px 0 0;
+        padding: 0 9px 0 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid var(--hairline);
+        color: var(--text2);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.005em;
+        -webkit-app-region: no-drag;
+    }
+    body.dark .priv { background: rgba(255, 255, 255, 0.09); }
+    .priv.on { display: flex; }
+    .priv svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
     /* ── Toolbar ──────────────────────────────────────────────────────── */
 
     .toolbar {
@@ -475,6 +505,30 @@ namespace SimpleBrowser
     /* ── Right side ───────────────────────────────────────────────────── */
 
     .actions { display: flex; align-items: center; gap: 3px; flex: none; }
+
+    /* The download button only appears once there is something to show. */
+    .dl {
+        position: relative;
+        display: none;
+    }
+    .dl.on { display: grid; }
+    .dl .dl-count {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: var(--orange);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 700;
+        line-height: 15px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+    .dl .dl-count.none { display: none; }
 
     .shields {
         height: 26px;
@@ -671,6 +725,11 @@ namespace SimpleBrowser
             <svg viewBox='0 0 24 24'><path d='M12 5.5v13M5.5 12h13'/></svg>
         </div>
 
+        <div class='priv' id='priv' title='Private browsing'>
+            <svg viewBox='0 0 24 24'><circle cx='7.4' cy='14' r='3.2'/><circle cx='16.6' cy='14' r='3.2'/><path d='M10.6 14h2.8'/><path d='M4.5 13.4 6.1 8.5h3.1'/><path d='M19.5 13.4 17.9 8.5h-3.1'/></svg>
+            <span>Private</span>
+        </div>
+
         <div class='wctl'>
             <div class='wbtn min' id='wctl-min' title='Minimize'>
                 <svg viewBox='0 0 10 10'><path d='M2 5h6'/></svg>
@@ -716,6 +775,11 @@ namespace SimpleBrowser
         </div>
 
         <div class='actions'>
+            <button class='iconbtn dl' id='btn-dl' title='Downloads (Ctrl+J)'>
+                <svg viewBox='0 0 24 24'><path d='M12 4.2v9.4'/><path d='M7.8 9.6 12 13.8l4.2-4.2'/><path d='M5.2 17.4h13.6'/></svg>
+                <span class='dl-count none' id='dl-count'>0</span>
+            </button>
+
             <div class='shields' id='btn-shields' title='Aura Shields'>
                 <svg viewBox='0 0 24 24'><path d='M12 3.2 5.2 6v5.3c0 4.35 2.9 7.6 6.8 9.5 3.9-1.9 6.8-5.15 6.8-9.5V6L12 3.2z'/></svg>
                 <span class='shield-count' id='shields-count'>0</span>
@@ -836,6 +900,15 @@ namespace SimpleBrowser
         urlInput.select();
     }
 
+    function fieldBox() {
+        var r = field.getBoundingClientRect();
+        return {
+            x: Math.round(r.left),
+            y: Math.round(r.bottom),
+            w: Math.round(r.width)
+        };
+    }
+
     field.addEventListener('mousedown', function (e) {
         if (e.target === field || e.target === urlDisplay || urlDisplay.contains(e.target)) {
             e.preventDefault();
@@ -851,6 +924,14 @@ namespace SimpleBrowser
         field.classList.remove('focused');
         urlInput.value = '';
         renderUrl();
+        post('blur_url');
+    });
+
+    // Every keystroke asks the host for suggestions; the list itself is a
+    // native window under the field, which is the only way out of this strip.
+    urlInput.addEventListener('input', function () {
+        var at = fieldBox();
+        post('url_input', { text: urlInput.value, x: at.x, y: at.y, w: at.w });
     });
 
     urlInput.addEventListener('keydown', function (e) {
@@ -862,6 +943,12 @@ namespace SimpleBrowser
             urlInput.value = '';
             urlInput.blur();
             post('blur_url');
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            post('url_key', { key: 'down' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            post('url_key', { key: 'up' });
         }
     });
 
@@ -880,6 +967,7 @@ namespace SimpleBrowser
     document.getElementById('btn-share').addEventListener('click', function () { post('share'); });
     document.getElementById('btn-menu').addEventListener('click', function () { post('menu'); });
     document.getElementById('btn-shields').addEventListener('click', function () { post('shield'); });
+    document.getElementById('btn-dl').addEventListener('click', function () { post('downloads'); });
     document.getElementById('btn-reload').addEventListener('click', function () {
         post(field.classList.contains('loading') ? 'stop' : 'reload');
     });
@@ -1173,6 +1261,32 @@ namespace SimpleBrowser
 
         focusUrl: function () {
             focusUrl();
+        },
+
+        setInput: function (text) {
+            urlInput.value = text || '';
+        },
+
+        setPrivate: function (on) {
+            var el = document.getElementById('priv');
+            if (el) { el.classList.toggle('on', !!on); }
+        },
+
+        setDownloads: function (total, active) {
+            var btn = document.getElementById('btn-dl');
+            var badge = document.getElementById('dl-count');
+            if (!btn) { return; }
+
+            btn.classList.toggle('on', total > 0);
+
+            if (badge) {
+                badge.classList.toggle('none', !(active > 0));
+                badge.textContent = active > 99 ? '99+' : String(active);
+            }
+
+            btn.title = active > 0
+                ? 'Downloads - ' + active + ' in progress (Ctrl+J)'
+                : 'Downloads (Ctrl+J)';
         },
 
         setMaximized: function (yes) {

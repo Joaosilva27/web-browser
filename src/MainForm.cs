@@ -31,6 +31,9 @@ namespace SimpleBrowser
         [DllImport("user32.dll")]
         private static extern short GetKeyState(int nVirtKey);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
         // A ContextMenuStrip normally closes itself when you click outside it, but
         // the WebView2 (Chromium) child windows swallow those clicks. Watch the
         // mouse globally while the menu is open so it dismisses like a real menu.
@@ -79,7 +82,13 @@ namespace SimpleBrowser
 
         private readonly BookmarkManager _bookmarkManager;
         private readonly HistoryManager _historyManager;
+        private readonly bool _privateMode;
+        private readonly ShortcutFilter _shortcuts;
         private bool _chromeReady;
+
+        /// <summary>Every window Aura has open, so a new one can be counted and
+        /// all of them can be persisted together.</summary>
+        internal static readonly List<MainForm> Windows = new List<MainForm>();
         private bool _windowStateKnown;
         private bool _windowMaximized;
         private bool _windowIsFullScreen;
@@ -92,23 +101,75 @@ namespace SimpleBrowser
         private bool _menuDismissedByButton;
         private DateTime _menuDismissedAtUtc = DateTime.MinValue;
 
-        public MainForm()
+        public MainForm(bool privateMode = false, List<string> startupTabs = null, int activeTab = 0)
         {
+            _privateMode = privateMode;
+            _startupTabs = startupTabs;
+            _startupActive = activeTab;
+
             Theme.LoadPreference();
             Settings.Current.ApplyThemePreference();
-            _bookmarkManager = new BookmarkManager();
-            _historyManager = new HistoryManager();
 
-            Application.AddMessageFilter(new ShortcutFilter(this));
+            // Bookmarks and history are shared between every window, so two
+            // windows cannot overwrite each other's files.
+            if (_sharedBookmarks == null) _sharedBookmarks = new BookmarkManager();
+            if (_sharedHistory == null) _sharedHistory = new HistoryManager();
+            _bookmarkManager = _sharedBookmarks;
+            _historyManager = _sharedHistory;
+
+            Windows.Add(this);
+
+            _shortcuts = new ShortcutFilter(this);
+            Application.AddMessageFilter(_shortcuts);
+
+            // The downloads list is shared, so every window watches it to keep
+            // its own toolbar count in step.
+            DownloadsManager.Current.Changed += OnDownloadsChanged;
 
             InitializeWindow();
             InitializeChrome();
+
+            // The suggestion list hangs outside the chrome strip, so it has to
+            // go the moment the window it points at moves or changes size.
+            Resize += delegate { HideSuggestions(); };
+            Move += delegate { HideSuggestions(); };
+
+            OpenStartupTabs();
+        }
+
+        private static BookmarkManager _sharedBookmarks;
+        private static HistoryManager _sharedHistory;
+
+        private readonly List<string> _startupTabs;
+        private readonly int _startupActive;
+
+        /// <summary>True when this window is a private window.</summary>
+        public bool IsPrivate { get { return _privateMode; } }
+
+        /// <summary>
+        /// The tabs a window opens with. A private window always starts empty;
+        /// a normal one either shows the start page or the tabs handed to it by
+        /// the session the app restored.
+        /// </summary>
+        private void OpenStartupTabs()
+        {
+            if (_startupTabs != null && _startupTabs.Count > 0)
+            {
+                foreach (string url in _startupTabs) AddNewTab(url);
+
+                if (_startupActive >= 0 && _startupActive < _tabControl.TabPages.Count)
+                {
+                    _tabControl.SelectedIndex = _startupActive;
+                }
+                return;
+            }
+
             AddNewTab();
         }
 
         private void InitializeWindow()
         {
-            Text = "Aura";
+            Text = _privateMode ? "Aura \u2014 Private" : "Aura";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             // The process is DPI-aware, so all sizes below are physical pixels.
@@ -145,6 +206,7 @@ namespace SimpleBrowser
             {
                 SyncAllToChrome();
                 SyncPageFullScreen();
+                if (!_privateMode) SessionStore.Touch();
             };
 
             _contentPanel.Controls.Add(_tabControl);
@@ -250,6 +312,13 @@ namespace SimpleBrowser
                     : CoreWebView2PreferredColorScheme.Light;
 
                 _chromeWebView.CoreWebView2.WebMessageReceived += OnChromeMessage;
+
+                var chromeController = BrowserEnvironment.ControllerOf(_chromeWebView);
+                if (chromeController != null)
+                {
+                    chromeController.AcceleratorKeyPressed += OnChromeAcceleratorPressed;
+                }
+
                 _chromeWebView.CoreWebView2.DOMContentLoaded += delegate
                 {
                     _chromeReady = true;
@@ -295,6 +364,12 @@ namespace SimpleBrowser
                     case "new_tab":
                         AddNewTab();
                         break;
+                    case "new_window":
+                        NewWindow(false);
+                        break;
+                    case "new_private_window":
+                        NewWindow(true);
+                        break;
                     case "close_tab":
                         int closeIdx = ExtractJsonInt(json, "index");
                         CloseTabAt(closeIdx);
@@ -334,6 +409,9 @@ namespace SimpleBrowser
                     case "shield":
                         ShowBraveShields();
                         break;
+                    case "downloads":
+                        ShowDownloads();
+                        break;
                     case "page_settings":
                         ShowPageSettings(ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
                         break;
@@ -352,7 +430,21 @@ namespace SimpleBrowser
                     case "focus_url":
                         FocusUrlBar();
                         break;
+                    case "url_input":
+                        {
+                            var fields = Json.AsObject(Json.Parse(json));
+                            ShowSuggestions(
+                                Json.GetString(fields, "text"),
+                                Json.GetInt(fields, "x", -1),
+                                Json.GetInt(fields, "y", -1),
+                                Json.GetInt(fields, "w", 0));
+                            break;
+                        }
+                    case "url_key":
+                        MoveSuggestion(ExtractJsonField(json, "key"));
+                        break;
                     case "blur_url":
+                        HideSuggestions();
                         FocusContent();
                         break;
                     case "close_active_tab":
@@ -419,7 +511,7 @@ namespace SimpleBrowser
 
         public void AddNewTab(string url = null)
         {
-            var tab = new BrowserTab(url);
+            var tab = new BrowserTab(url, _privateMode);
             tab.UrlChanged += OnTabUrlChanged;
             tab.TitleChanged += OnTabTitleChanged;
             tab.StateChanged += OnTabStateChanged;
@@ -428,10 +520,15 @@ namespace SimpleBrowser
             tab.WindowCloseRequested += OnTabWindowCloseRequested;
             tab.SettingsMessage += OnTabSettingsMessage;
             tab.FullScreenChanged += OnTabFullScreenChanged;
+            tab.DownloadStarting += OnTabDownloadStarting;
+            tab.PermissionRequested += OnTabPermissionRequested;
+            tab.ContextMenuRequested += OnTabContextMenuRequested;
+            tab.AcceleratorPressed += OnTabAcceleratorPressed;
 
             _tabControl.TabPages.Add(tab);
             _tabControl.SelectedTab = tab;
 
+            if (!_privateMode) SessionStore.Touch();
             SyncAllToChrome();
         }
 
@@ -439,7 +536,9 @@ namespace SimpleBrowser
         {
             if (_tabControl.TabPages.Count > 1 && index >= 0 && index < _tabControl.TabPages.Count)
             {
-                var tab = _tabControl.TabPages[index];
+                var tab = _tabControl.TabPages[index] as BrowserTab;
+                RememberClosed(tab, index);
+
                 _tabControl.TabPages.RemoveAt(index);
                 tab.Dispose();
                 _tabControl.SelectedIndex = Math.Max(0, index - 1);
@@ -448,8 +547,84 @@ namespace SimpleBrowser
             {
                 ActiveTab.LoadHomePage();
             }
+            if (!_privateMode) SessionStore.Touch();
             SyncAllToChrome();
             SyncPageFullScreen();
+        }
+
+        /// <summary>A tab that was closed, kept so Ctrl+Shift+T can bring it back.</summary>
+        private class ClosedTab
+        {
+            public string Url;
+            public string Title;
+            public int Index;
+        }
+
+        private readonly List<ClosedTab> _closedTabs = new List<ClosedTab>();
+
+        /// <summary>Remembers a closed tab, unless it was only a start page.</summary>
+        private void RememberClosed(BrowserTab tab, int index)
+        {
+            if (tab == null) return;
+
+            string url = tab.CurrentUrl;
+            if (string.IsNullOrEmpty(url) || url == "about:home" || url == SettingsPage.Address) return;
+
+            var record = new ClosedTab();
+            record.Url = url;
+            record.Title = tab.DisplayTitle;
+            record.Index = index;
+
+            _closedTabs.Add(record);
+            if (_closedTabs.Count > 15) _closedTabs.RemoveAt(0);
+        }
+
+        /// <summary>Brings back the most recently closed tab, in its old place.</summary>
+        private void ReopenClosedTab()
+        {
+            int last = _closedTabs.Count - 1;
+            if (last < 0) return;
+
+            var record = _closedTabs[last];
+            _closedTabs.RemoveAt(last);
+
+            AddNewTab(record.Url);
+
+            // Put it back where it was, the way a browser does.
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            int current = _tabControl.TabPages.IndexOf(tab);
+            int target = Math.Max(0, Math.Min(record.Index, _tabControl.TabPages.Count - 1));
+            if (current >= 0 && current != target)
+            {
+                _tabControl.TabPages.RemoveAt(current);
+                _tabControl.TabPages.Insert(target, tab);
+                _tabControl.SelectedTab = tab;
+            }
+        }
+
+        /// <summary>The tabs this window is showing, for the saved session.</summary>
+        public WindowSession CaptureTabs()
+        {
+            var session = new WindowSession();
+
+            for (int i = 0; i < _tabControl.TabPages.Count; i++)
+            {
+                var tab = _tabControl.TabPages[i] as BrowserTab;
+                if (tab == null) continue;
+
+                string url = tab.CurrentUrl;
+                if (string.IsNullOrEmpty(url)) url = "about:home";
+                // A paused download or a settings page is not worth reopening.
+                if (url == SettingsPage.Address) continue;
+
+                if (session.Active < 0 && i == _tabControl.SelectedIndex) session.Active = session.Tabs.Count;
+                session.Tabs.Add(url);
+            }
+
+            if (session.Active < 0) session.Active = 0;
+            return session;
         }
 
         private void ToggleBookmarkCurrent()
@@ -508,6 +683,18 @@ namespace SimpleBrowser
             SyncShields();
             SyncBookmarksBar();
             SyncWindowState();
+            SyncPrivate();
+            SyncDownloads();
+        }
+
+        /// <summary>Tells the chrome whether this window is a private one.</summary>
+        private void SyncPrivate()
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                string.Format("window.BraveAPI && window.BraveAPI.setPrivate({0});",
+                    _privateMode ? "true" : "false"));
         }
 
         /// <summary>
@@ -1082,11 +1269,18 @@ namespace SimpleBrowser
                 SyncUrl();
                 SyncBookmarked();
             }
+
+            // The address a tab is showing is part of the saved session.
+            if (!_privateMode) SessionStore.Touch();
         }
 
         private void OnTabTitleChanged(BrowserTab tab, string title)
         {
             SyncTabs();
+
+            // Private windows leave no trace in the history.
+            if (_privateMode || tab.IsPrivate) return;
+
             if (!string.IsNullOrEmpty(tab.CurrentUrl) && tab.CurrentUrl != "about:home")
             {
                 _historyManager.AddEntry(title, tab.CurrentUrl);
@@ -1134,7 +1328,7 @@ namespace SimpleBrowser
                     popup.Owner = this;
                     popup.Show();
 
-                    await popup.View.EnsureCoreWebView2Async(await BrowserEnvironment.GetAsync());
+                    await BrowserEnvironment.InitializeAsync(popup.View, _privateMode);
                     popup.Attach();
 
                     e.NewWindow = popup.View.CoreWebView2;
@@ -1251,6 +1445,353 @@ namespace SimpleBrowser
             popover.Show(this);
         }
 
+        // ── Page context menu ─────────────────────────────────────────────────
+
+        /// <summary>A menu entry that runs the given action when it is clicked.</summary>
+        private static ToolStripMenuItem MenuAction(string text, Action action)
+        {
+            return new ToolStripMenuItem(text, null, delegate { action(); });
+        }
+
+        private void CopyText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            try
+            {
+                Clipboard.SetText(text);
+                ChromeToast("Copied");
+            }
+            catch
+            {
+                // Another process can hold the clipboard; nothing to do.
+            }
+        }
+
+        /// <summary>Opens a page in a fresh private window, straight away.</summary>
+        private static void OpenInPrivateWindow(string url)
+        {
+            var window = new MainForm(true, new List<string> { url }, 0);
+            window.Show();
+        }
+
+        /// <summary>
+        /// The menu a right-click on the page raises. WebView2 reports what was
+        /// under the pointer, so the menu knows a link from an image and offers
+        /// only the actions that fit, the way a browser's own menu does.
+        /// </summary>
+        private void OnTabContextMenuRequested(BrowserTab tab, CoreWebView2ContextMenuRequestedEventArgs e)
+        {
+            // Aura draws the menu, so the default one must not appear as well.
+            e.Handled = true;
+
+            if (tab == null || tab != ActiveTab) return;
+
+            var target = e.ContextMenuTarget;
+            var menu = NewMenu();
+            var engine = Settings.Current.Engine;
+
+            if (target != null && target.HasLinkUri && !string.IsNullOrEmpty(target.LinkUri))
+            {
+                string link = target.LinkUri;
+                menu.Items.Add(MenuAction("Open Link in New Tab", delegate { AddNewTab(link); }));
+                menu.Items.Add(MenuAction("Open Link in New Window", delegate { NewWindowWith(link); }));
+                menu.Items.Add(MenuAction("Open Link in Private Window", delegate { OpenInPrivateWindow(link); }));
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(MenuAction("Copy Link Address", delegate { CopyText(link); }));
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
+            if (target != null && target.Kind == CoreWebView2ContextMenuTargetKind.Image
+                && target.HasSourceUri && !string.IsNullOrEmpty(target.SourceUri))
+            {
+                string image = target.SourceUri;
+                menu.Items.Add(MenuAction("Open Image in New Tab", delegate { AddNewTab(image); }));
+                menu.Items.Add(MenuAction("Copy Image Address", delegate { CopyText(image); }));
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
+            if (target != null && target.HasSelection && !string.IsNullOrEmpty(target.SelectionText))
+            {
+                string selected = target.SelectionText;
+                string shown = selected.Length > 32 ? selected.Substring(0, 29) + "\u2026" : selected;
+
+                menu.Items.Add(MenuAction("Copy", delegate { CopyText(selected); }));
+                menu.Items.Add(MenuAction("Search " + engine.ShortName + " for \u201c" + shown + "\u201d",
+                    delegate { AddNewTab(engine.Build(selected)); }));
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
+            if (target != null && target.IsEditable)
+            {
+                var page = tab;
+                menu.Items.Add(MenuAction("Undo", delegate { page.RunScript("document.execCommand('undo')"); }));
+                menu.Items.Add(MenuAction("Cut", delegate { page.RunScript("document.execCommand('cut')"); }));
+                menu.Items.Add(MenuAction("Copy", delegate { page.RunScript("document.execCommand('copy')"); }));
+                menu.Items.Add(MenuAction("Paste", delegate { page.RunScript("document.execCommand('paste')"); }));
+                menu.Items.Add(MenuAction("Select All", delegate { page.RunScript("document.execCommand('selectAll')"); }));
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
+            var back = MenuAction("Back", delegate { if (ActiveTab != null) ActiveTab.GoBack(); });
+            back.Enabled = tab.CanGoBack;
+            var forward = MenuAction("Forward", delegate { if (ActiveTab != null) ActiveTab.GoForward(); });
+            forward.Enabled = tab.CanGoForward;
+
+            menu.Items.Add(back);
+            menu.Items.Add(forward);
+            menu.Items.Add(MenuAction("Reload", delegate { if (ActiveTab != null) ActiveTab.Reload(); }));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(MenuAction("Find on Page\u2026", delegate { tab.ToggleFind(); }));
+            menu.Items.Add(MenuAction("View Page Source", delegate { ShowPageSource(); }));
+
+            ShowContextMenu(menu, tab, e.Location);
+        }
+
+        /// <summary>
+        /// Shows a menu at a point the page reported. The point is in the page's
+        /// own pixels, so it needs the tab's position on screen as well.
+        /// </summary>
+        private void ShowContextMenu(ContextMenuStrip menu, BrowserTab tab, Point pagePoint)
+        {
+            if (tab == null || tab.WebView == null) return;
+
+            Point at = tab.WebView.PointToScreen(
+                new Point(Dpi.Px(Math.Max(0, pagePoint.X)), Dpi.Px(Math.Max(0, pagePoint.Y))));
+
+            Rectangle work = Screen.FromControl(this).WorkingArea;
+            int x = Math.Min(Math.Max(work.Left, at.X), Math.Max(work.Left, work.Right - menu.Width - Dpi.Px(4)));
+            int y = Math.Min(Math.Max(work.Top, at.Y), Math.Max(work.Top, work.Bottom - menu.Height - Dpi.Px(4)));
+
+            menu.Show(new Point(x, y));
+        }
+
+        // ── Site permissions ─────────────────────────────────────────────────
+
+        /// <summary>The words Aura uses for each permission a page can ask for.</summary>
+        public static string PermissionName(CoreWebView2PermissionKind kind)
+        {
+            switch (kind)
+            {
+                case CoreWebView2PermissionKind.Microphone: return "use your microphone";
+                case CoreWebView2PermissionKind.Camera: return "use your camera";
+                case CoreWebView2PermissionKind.Geolocation: return "know your location";
+                case CoreWebView2PermissionKind.Notifications: return "send you notifications";
+                case CoreWebView2PermissionKind.ClipboardRead: return "read your clipboard";
+                case CoreWebView2PermissionKind.OtherSensors: return "use your device's sensors";
+                case CoreWebView2PermissionKind.MultipleAutomaticDownloads: return "download multiple files";
+                case CoreWebView2PermissionKind.FileReadWrite: return "read and write files you pick";
+                case CoreWebView2PermissionKind.Autoplay: return "play sound automatically";
+                case CoreWebView2PermissionKind.LocalFonts: return "see the fonts on your device";
+                case CoreWebView2PermissionKind.MidiSystemExclusiveMessages: return "use your MIDI devices";
+                case CoreWebView2PermissionKind.WindowManagement: return "manage windows";
+                default: return "use a feature of your device";
+            }
+        }
+
+        /// <summary>Short label used in the settings page's permission list.</summary>
+        public static string PermissionLabel(CoreWebView2PermissionKind kind)
+        {
+            switch (kind)
+            {
+                case CoreWebView2PermissionKind.Microphone: return "Microphone";
+                case CoreWebView2PermissionKind.Camera: return "Camera";
+                case CoreWebView2PermissionKind.Geolocation: return "Location";
+                case CoreWebView2PermissionKind.Notifications: return "Notifications";
+                case CoreWebView2PermissionKind.ClipboardRead: return "Clipboard";
+                case CoreWebView2PermissionKind.OtherSensors: return "Sensors";
+                case CoreWebView2PermissionKind.MultipleAutomaticDownloads: return "Multiple downloads";
+                case CoreWebView2PermissionKind.FileReadWrite: return "File editing";
+                case CoreWebView2PermissionKind.Autoplay: return "Autoplay";
+                case CoreWebView2PermissionKind.LocalFonts: return "Local fonts";
+                case CoreWebView2PermissionKind.MidiSystemExclusiveMessages: return "MIDI devices";
+                case CoreWebView2PermissionKind.WindowManagement: return "Window management";
+                default: return "Other";
+            }
+        }
+
+        /// <summary>
+        /// Asks the user, in Aura's own words, before a page uses the camera,
+        /// the microphone, their location and so on, and remembers the answer
+        /// for that site the way a browser normally does.
+        /// </summary>
+        private void OnTabPermissionRequested(BrowserTab tab, CoreWebView2PermissionRequestedEventArgs e)
+        {
+            var deferral = e.GetDeferral();
+            try
+            {
+                e.Handled = true;
+
+                // Nothing on screen is asking, so there is nothing to ask about.
+                if (tab == null || tab != ActiveTab)
+                {
+                    e.State = CoreWebView2PermissionState.Deny;
+                    e.SavesInProfile = false;
+                    return;
+                }
+
+                string host = SiteSettings.HostOf(e.Uri);
+                if (string.IsNullOrEmpty(host)) host = e.Uri;
+
+                using (var prompt = new PermissionPromptForm(host, PermissionName(e.PermissionKind)))
+                {
+                    bool decided = prompt.ShowDialog(this) == DialogResult.OK;
+
+                    e.State = prompt.Allowed
+                        ? CoreWebView2PermissionState.Allow
+                        : CoreWebView2PermissionState.Deny;
+
+                    // A dismissed prompt is a refusal for now, not a lasting one.
+                    e.SavesInProfile = decided;
+                }
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
+        /// <summary>The id the settings page uses for a permission kind.</summary>
+        internal static string PermissionId(CoreWebView2PermissionKind kind)
+        {
+            return kind.ToString().ToLowerInvariant();
+        }
+
+        /// <summary>The id the settings page uses for an answer.</summary>
+        internal static string StateId(CoreWebView2PermissionState state)
+        {
+            if (state == CoreWebView2PermissionState.Allow) return "allow";
+            if (state == CoreWebView2PermissionState.Deny) return "block";
+            return "ask";
+        }
+
+        private static CoreWebView2PermissionKind KindFromId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return CoreWebView2PermissionKind.UnknownPermission;
+
+            foreach (CoreWebView2PermissionKind kind in Enum.GetValues(typeof(CoreWebView2PermissionKind)))
+            {
+                if (string.Equals(kind.ToString(), id, StringComparison.OrdinalIgnoreCase)) return kind;
+            }
+
+            return CoreWebView2PermissionKind.UnknownPermission;
+        }
+
+        private static CoreWebView2PermissionState StateFromId(string id)
+        {
+            if (id == "allow") return CoreWebView2PermissionState.Allow;
+            if (id == "block") return CoreWebView2PermissionState.Deny;
+            return CoreWebView2PermissionState.Default;
+        }
+
+        /// <summary>
+        /// Lists the answers the user has given, so the settings page can show
+        /// them and offer to change them.
+        /// </summary>
+        private void SendPermissions(BrowserTab tab)
+        {
+            if (tab == null) return;
+
+            var profile = ProfileForData();
+            if (profile == null)
+            {
+                tab.RunScript("auraPermissions([]);");
+                return;
+            }
+
+            RefreshPermissionList(tab, profile);
+        }
+
+        private async void RefreshPermissionList(BrowserTab tab, CoreWebView2Profile profile)
+        {
+            try
+            {
+                var settings = await profile.GetNonDefaultPermissionSettingsAsync();
+
+                var ordered = new List<CoreWebView2PermissionSetting>();
+                if (settings != null) ordered.AddRange(settings);
+
+                // Grouped by site, so a page that has answered for the camera and
+                // the microphone reads as one thing.
+                ordered.Sort(delegate (CoreWebView2PermissionSetting a, CoreWebView2PermissionSetting b)
+                {
+                    int byOrigin = string.Compare(a.PermissionOrigin, b.PermissionOrigin,
+                        StringComparison.OrdinalIgnoreCase);
+                    if (byOrigin != 0) return byOrigin;
+
+                    return string.Compare(a.PermissionKind.ToString(), b.PermissionKind.ToString(),
+                        StringComparison.Ordinal);
+                });
+
+                var rows = new List<object>();
+                foreach (var setting in ordered)
+                {
+                    rows.Add(Json.Obj(
+                        "origin", setting.PermissionOrigin,
+                        "kind", PermissionId(setting.PermissionKind),
+                        "kindLabel", PermissionLabel(setting.PermissionKind),
+                        "state", StateId(setting.PermissionState)));
+                }
+
+                string json = Json.Write(rows);
+                tab.RunScript("auraPermissions(" + (json == null ? "[]" : json) + ");");
+            }
+            catch
+            {
+                // A profile that is shutting down has nothing to report.
+                tab.RunScript("auraPermissions([]);");
+            }
+        }
+
+        private async void SetPermission(BrowserTab tab, string origin, string kindId, string stateId)
+        {
+            var profile = ProfileForData();
+            if (profile == null || string.IsNullOrEmpty(origin)) return;
+
+            var kind = KindFromId(kindId);
+            if (kind == CoreWebView2PermissionKind.UnknownPermission) return;
+
+            try
+            {
+                await profile.SetPermissionStateAsync(kind, origin, StateFromId(stateId));
+            }
+            catch
+            {
+                // The profile may be closing.
+            }
+
+            SendPermissions(tab);
+        }
+
+        /// <summary>Puts every answer back to "ask", leaving the browser tidy.</summary>
+        private async void ClearPermissions(BrowserTab tab)
+        {
+            var profile = ProfileForData();
+            if (profile == null) return;
+
+            try
+            {
+                var settings = await profile.GetNonDefaultPermissionSettingsAsync();
+
+                var items = new List<CoreWebView2PermissionSetting>();
+                if (settings != null) items.AddRange(settings);
+
+                foreach (var setting in items)
+                {
+                    await profile.SetPermissionStateAsync(
+                        setting.PermissionKind,
+                        setting.PermissionOrigin,
+                        CoreWebView2PermissionState.Default);
+                }
+            }
+            catch
+            {
+                // Nothing left to clear.
+            }
+
+            SendPermissions(tab);
+        }
+
         private void FocusContent()
         {
             BeginInvoke(new Action(delegate
@@ -1275,6 +1816,186 @@ namespace SimpleBrowser
                 _chromeWebView.CoreWebView2.ExecuteScriptAsync(
                     "window.BraveAPI && window.BraveAPI.focusUrl();");
             }));
+        }
+
+        // ── Address bar suggestions ───────────────────────────────────────────
+
+        private UrlSuggestForm _suggest;
+        private List<SuggestEntry> _suggestEntries;
+        private int _suggestIndex = -1;
+        private string _suggestTyped = "";
+        private int _suggestX = -1;
+        private int _suggestY = -1;
+        private int _suggestW;
+
+        /// <summary>
+        /// Builds the list that hangs under the address bar: the search first,
+        /// then the pages the user has visited, saved or pinned that match.
+        /// </summary>
+        private void ShowSuggestions(string text, int cssX, int cssY, int cssWidth)
+        {
+            _suggestTyped = text ?? "";
+
+            if (cssX >= 0) _suggestX = cssX;
+            if (cssY >= 0) _suggestY = cssY;
+            if (cssWidth > 0) _suggestW = cssWidth;
+
+            string needle = _suggestTyped.Trim();
+            if (needle.Length == 0)
+            {
+                HideSuggestions();
+                return;
+            }
+
+            var entries = BuildSuggestions(needle);
+            if (entries.Count == 0)
+            {
+                HideSuggestions();
+                return;
+            }
+
+            _suggestEntries = entries;
+            _suggestIndex = -1;
+
+            if (_suggest == null || _suggest.IsDisposed)
+            {
+                _suggest = new UrlSuggestForm();
+                _suggest.Chosen += AcceptSuggestion;
+            }
+
+            _suggest.SetEntries(entries);
+
+            if (_suggestX < 0 || _suggestY < 0 || _chromeWebView == null) return;
+
+            Point at = _chromeWebView.PointToScreen(
+                new Point(Dpi.Px(_suggestX), Dpi.Px(_suggestY) + Dpi.Px(3)));
+
+            int width = _suggestW > 0 ? Dpi.Px(_suggestW) : Dpi.Px(520);
+            Rectangle work = Screen.FromControl(this).WorkingArea;
+            int x = Math.Min(Math.Max(work.Left, at.X),
+                Math.Max(work.Left, work.Right - width - Dpi.Px(6)));
+
+            _suggest.ShowAt(new Point(x, at.Y), width);
+        }
+
+        /// <summary>
+        /// Moves the highlight with the arrow keys the chrome forwarded. The
+        /// highlighted address is written back into the field, so Enter simply
+        /// takes whatever the field holds and needs no special case there.
+        /// </summary>
+        private void MoveSuggestion(string key)
+        {
+            if (_suggestEntries == null || _suggestEntries.Count == 0) return;
+            if (_suggest == null || _suggest.IsDisposed || !_suggest.IsShown) return;
+
+            if (key == "down") _suggestIndex = Math.Min(_suggestIndex + 1, _suggestEntries.Count - 1);
+            else if (key == "up") _suggestIndex = Math.Max(_suggestIndex - 1, -1);
+            else return;
+
+            _suggest.Highlight(_suggestIndex);
+
+            string text = _suggestIndex < 0
+                ? _suggestTyped
+                : _suggestEntries[_suggestIndex].Url;
+
+            SetChromeInput(text);
+        }
+
+        private void SetChromeInput(string text)
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            string literal = Json.Write(text ?? string.Empty);
+            if (literal == null) return;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                "window.BraveAPI && window.BraveAPI.setInput(" + literal + ");");
+        }
+
+        private void HideSuggestions()
+        {
+            if (_suggest != null && !_suggest.IsDisposed) _suggest.HideQuietly();
+
+            _suggestEntries = null;
+            _suggestIndex = -1;
+        }
+
+        private void AcceptSuggestion(SuggestEntry entry)
+        {
+            HideSuggestions();
+            if (entry == null || string.IsNullOrEmpty(entry.Url)) return;
+
+            if (ActiveTab != null) ActiveTab.Navigate(entry.Url);
+            FocusContent();
+        }
+
+        private List<SuggestEntry> BuildSuggestions(string needle)
+        {
+            var entries = new List<SuggestEntry>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var engine = Settings.Current.Engine;
+
+            var search = new SuggestEntry();
+            search.IsSearch = true;
+            search.Url = engine.Build(needle);
+            search.Title = "Search " + engine.ShortName + " for \u201c" + Shorten(needle, 48) + "\u201d";
+            search.Detail = string.Empty;
+            entries.Add(search);
+
+            // Recent pages first: what was just visited is usually what is meant.
+            foreach (var item in _historyManager.GetHistory())
+            {
+                if (entries.Count >= 8) break;
+                if (!Matches(needle, item.Title, item.Url)) continue;
+                if (!seen.Add(item.Url)) continue;
+                entries.Add(PageEntry(item.Title, item.Url));
+            }
+
+            foreach (var bookmark in _bookmarkManager.GetBookmarks())
+            {
+                if (entries.Count >= 8) break;
+                if (!Matches(needle, bookmark.Title, bookmark.Url)) continue;
+                if (!seen.Add(bookmark.Url)) continue;
+                entries.Add(PageEntry(bookmark.Title, bookmark.Url));
+            }
+
+            foreach (var favorite in FavoritesStore.Current.GetFavorites())
+            {
+                if (entries.Count >= 8) break;
+                if (!Matches(needle, favorite.Title, favorite.Url)) continue;
+                if (!seen.Add(favorite.Url)) continue;
+                entries.Add(PageEntry(favorite.Title, favorite.Url));
+            }
+
+            return entries;
+        }
+
+        private static SuggestEntry PageEntry(string title, string url)
+        {
+            var entry = new SuggestEntry();
+            entry.Url = url;
+            entry.Title = string.IsNullOrEmpty(title) ? url : title;
+            entry.Detail = url;
+            return entry;
+        }
+
+        private static bool Matches(string needle, string title, string url)
+        {
+            if (string.IsNullOrEmpty(needle)) return false;
+
+            if (!string.IsNullOrEmpty(title)
+                && title.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+            return !string.IsNullOrEmpty(url)
+                && url.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string Shorten(string text, int limit)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            if (text.Length <= limit) return text;
+            return text.Substring(0, limit - 1) + "\u2026";
         }
 
         private void LayoutTabs()
@@ -1315,6 +2036,57 @@ namespace SimpleBrowser
             _tabControl.SelectedIndex = (_tabControl.SelectedIndex + delta + count) % count;
         }
 
+        /// <summary>
+        /// Opens another Aura window. A private one is given its own in-private
+        /// profile, so nothing it does is written to the normal profile on disk.
+        /// </summary>
+        internal static MainForm NewWindow(bool privateMode)
+        {
+            var window = new MainForm(privateMode);
+            window.Show();
+            return window;
+        }
+
+        /// <summary>Opens a window that already has a page in it.</summary>
+        internal static MainForm NewWindowWith(string url)
+        {
+            var window = new MainForm(false, new List<string> { url }, 0);
+            window.Show();
+            return window;
+        }
+
+        /// <summary>
+        /// The window a handed-over page should open in: the one on screen if it
+        /// is a normal window, otherwise the newest normal window there is.
+        /// </summary>
+        internal static MainForm Target
+        {
+            get
+            {
+                var active = Form.ActiveForm as MainForm;
+                if (active != null && !active.IsPrivate && !active.IsDisposed) return active;
+
+                for (int i = Windows.Count - 1; i >= 0; i--)
+                {
+                    var window = Windows[i];
+                    if (window != null && !window.IsDisposed && !window.IsPrivate) return window;
+                }
+
+                return null;
+            }
+        }
+
+        /// <summary>Brings the window forward and shows a page in a new tab.</summary>
+        public void OpenUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return;
+
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+
+            Activate();
+            AddNewTab(url);
+        }
+
         private void ShareCurrentPage()
         {
             if (ActiveTab == null) return;
@@ -1350,7 +2122,9 @@ namespace SimpleBrowser
 
         internal bool HandleShortcutKey(int vk)
         {
-            if (ActiveForm != this) return false;
+            // Only the window the user is working in answers, so two windows
+            // never both act on one keystroke.
+            if (GetForegroundWindow() != Handle) return false;
 
             bool ctrl = (GetKeyState(0x11) & 0x8000) != 0;
             bool alt = (GetKeyState(0x12) & 0x8000) != 0;
@@ -1362,23 +2136,30 @@ namespace SimpleBrowser
             {
                 switch (vk)
                 {
-                    case 0x54: action = "new_tab"; break;                          // Ctrl+T
+                    case 0x54: action = shift ? "reopen_tab" : "new_tab"; break;   // Ctrl+T / Ctrl+Shift+T
+                    case 0x4E: action = shift ? "new_private_window" : "new_window"; break; // Ctrl+N
                     case 0x57: action = "close_tab"; break;                        // Ctrl+W
                     case 0x4C: action = "focus_url"; break;                        // Ctrl+L
                     case 0x52: action = "reload"; break;                           // Ctrl+R
                     case 0x44: action = "bookmark"; break;                         // Ctrl+D
                     case 0x48: action = "history"; break;                          // Ctrl+H
+                    case 0x46: action = "find"; break;                             // Ctrl+F
+                    case 0x4A: action = "downloads"; break;                        // Ctrl+J
                     case 0x55: action = "source"; break;                           // Ctrl+U
                     case 0x4F: if (shift) action = "bookmarks"; break;             // Ctrl+Shift+O
                     case 0x42: if (shift) action = "bookmarks_bar"; break;         // Ctrl+Shift+B
                     case 0xBC: action = "settings"; break;                         // Ctrl+,
                     case 0x09: action = shift ? "prev_tab" : "next_tab"; break;    // Ctrl+Tab
+                    case 0xBB: action = "zoom_in"; break;                          // Ctrl++
+                    case 0xBD: action = "zoom_out"; break;                         // Ctrl+-
+                    case 0x30: action = "zoom_reset"; break;                       // Ctrl+0
                 }
             }
             else if (alt && !ctrl)
             {
                 if (vk == 0x25) action = "back";        // Alt+Left
                 else if (vk == 0x27) action = "forward"; // Alt+Right
+                else if (vk == 0x44) action = "focus_url"; // Alt+D
             }
             else if (!ctrl && !alt && vk == 0x74)       // F5
             {
@@ -1391,16 +2172,45 @@ namespace SimpleBrowser
             return true;
         }
 
+        /// <summary>
+        /// Keys pressed while the chrome has focus. The chrome is a WebView too,
+        /// so its browser keys arrive here rather than at the message filter.
+        /// </summary>
+        private void OnChromeAcceleratorPressed(object sender, CoreWebView2AcceleratorKeyPressedEventArgs e)
+        {
+            if (e.KeyEventKind != CoreWebView2KeyEventKind.KeyDown
+                && e.KeyEventKind != CoreWebView2KeyEventKind.SystemKeyDown) return;
+
+            if (HandleShortcutKey((int)e.VirtualKey)) e.Handled = true;
+        }
+
+        /// <summary>
+        /// Browser keys pressed in the page on show. Answering one marks it
+        /// handled, which is what stops Chromium drawing its own find bar or
+        /// reloading behind Aura's back; everything Aura does not claim keeps
+        /// working the way the engine normally does it.
+        /// </summary>
+        private void OnTabAcceleratorPressed(BrowserTab tab, int vk, CoreWebView2AcceleratorKeyPressedEventArgs e)
+        {
+            if (tab != ActiveTab) return;
+            if (HandleShortcutKey(vk)) e.Handled = true;
+        }
+
         private void HandleShortcutAction(string action)
         {
             switch (action)
             {
                 case "new_tab": AddNewTab(); break;
+                case "new_window": NewWindow(false); break;
+                case "new_private_window": NewWindow(true); break;
+                case "reopen_tab": ReopenClosedTab(); break;
                 case "close_tab": CloseTabAt(_tabControl.SelectedIndex); break;
                 case "focus_url": FocusUrlBar(); break;
                 case "reload": if (ActiveTab != null) ActiveTab.Reload(); break;
                 case "bookmark": ToggleBookmarkCurrent(); break;
                 case "history": ShowHistory(); break;
+                case "find": if (ActiveTab != null) ActiveTab.ToggleFind(); break;
+                case "downloads": ShowDownloads(); break;
                 case "bookmarks": ShowBookmarks(); break;
                 case "bookmarks_bar": Settings.Current.Set("bookmarksBar", !Settings.Current.ShowBookmarksBar); break;
                 case "source": ShowPageSource(); break;
@@ -1409,7 +2219,39 @@ namespace SimpleBrowser
                 case "forward": if (ActiveTab != null) ActiveTab.GoForward(); break;
                 case "next_tab": CycleTab(1); break;
                 case "prev_tab": CycleTab(-1); break;
+                case "zoom_in": StepSiteZoom(1); break;
+                case "zoom_out": StepSiteZoom(-1); break;
+                case "zoom_reset": ResetSiteZoom(); break;
             }
+        }
+
+        /// <summary>
+        /// Ctrl+plus and Ctrl+minus walk the same steps as the AA popover, and
+        /// belong to the site on screen rather than to Aura as a whole.
+        /// </summary>
+        private void StepSiteZoom(int direction)
+        {
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            string url = tab.CurrentUrl;
+            if (SiteSettings.HostOf(url).Length == 0) return;
+
+            int next = SiteSettings.Step(SiteSettings.Current.ZoomFor(url), direction);
+            SiteSettings.Current.SetZoom(url, next);
+            tab.ApplySiteZoom();
+            ChromeToast(SiteSettings.PercentText(next));
+        }
+
+        private void ResetSiteZoom()
+        {
+            var tab = ActiveTab;
+            if (tab == null) return;
+            if (SiteSettings.HostOf(tab.CurrentUrl).Length == 0) return;
+
+            SiteSettings.Current.SetZoom(tab.CurrentUrl, 100);
+            tab.ApplySiteZoom();
+            ChromeToast("100%");
         }
 
         private void ShowHistory()
@@ -1449,6 +2291,236 @@ namespace SimpleBrowser
 
                 if (importForm.FavoritesChanged) RefreshHomeTabs();
             }
+        }
+
+        // ── Downloads ─────────────────────────────────────────────────────────
+
+        private DownloadsForm _downloadsWindow;
+
+        /// <summary>Opens the downloads list, reusing the window if it is open.</summary>
+        private void ShowDownloads()
+        {
+            if (_downloadsWindow != null && !_downloadsWindow.IsDisposed)
+            {
+                if (_downloadsWindow.WindowState == FormWindowState.Minimized)
+                {
+                    _downloadsWindow.WindowState = FormWindowState.Normal;
+                }
+                _downloadsWindow.Activate();
+                return;
+            }
+
+            _downloadsWindow = new DownloadsForm();
+            _downloadsWindow.Owner = this;
+            _downloadsWindow.FormClosed += delegate { _downloadsWindow = null; };
+            _downloadsWindow.Show();
+        }
+
+        /// <summary>Keeps the toolbar's download count in step with the list.</summary>
+        private void SyncDownloads()
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            int total = DownloadsManager.Current.GetItems().Count;
+            int active = DownloadsManager.Current.ActiveCount;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                string.Format("window.BraveAPI && window.BraveAPI.setDownloads({0}, {1});", total, active));
+        }
+
+        private void OnDownloadsChanged()
+        {
+            SyncDownloads();
+        }
+
+        /// <summary>
+        /// Runs a download Aura's way: the file lands in the Downloads folder
+        /// (or wherever the user asks), the list keeps up with it, and WebView2's
+        /// own download bar never appears inside the page.
+        /// </summary>
+        private void OnTabDownloadStarting(BrowserTab tab, CoreWebView2DownloadStartingEventArgs e)
+        {
+            var deferral = e.GetDeferral();
+            try
+            {
+                var operation = e.DownloadOperation;
+                if (operation == null) return;
+
+                string folder = Path.GetDirectoryName(e.ResultFilePath);
+                string name = Path.GetFileName(e.ResultFilePath);
+                if (string.IsNullOrEmpty(folder)) folder = DefaultDownloadFolder();
+                if (string.IsNullOrEmpty(name)) name = "download";
+
+                if (Settings.Current.AskDownloadPath)
+                {
+                    string chosen = AskForSavePath(folder, name);
+                    if (string.IsNullOrEmpty(chosen))
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+
+                    e.ResultFilePath = chosen;
+                    name = Path.GetFileName(chosen);
+                }
+                else
+                {
+                    string target = UniquePath(Path.Combine(folder, name));
+                    e.ResultFilePath = target;
+                    name = Path.GetFileName(target);
+                }
+
+                e.Handled = true;
+
+                var record = DownloadsManager.Current.Add(
+                    operation.Uri, name, e.ResultFilePath, TotalOf(operation));
+                record.Operation = operation;
+
+                operation.BytesReceivedChanged += delegate
+                {
+                    record.BytesReceived = (long)operation.BytesReceived;
+                    long total = TotalOf(operation);
+                    if (total > 0) record.TotalBytes = total;
+                    // Progress is cheap to show and expensive to write, so the
+                    // list is told but the file on disk is left alone.
+                    DownloadsManager.Current.Notify();
+                };
+
+                operation.StateChanged += delegate
+                {
+                    record.BytesReceived = (long)operation.BytesReceived;
+                    long total = TotalOf(operation);
+                    if (total > 0) record.TotalBytes = total;
+
+                    if (operation.State == CoreWebView2DownloadState.Completed)
+                    {
+                        record.State = "done";
+                        record.Detail = null;
+                        record.Operation = null;
+                        ChromeToast("Downloaded " + record.FileName);
+                    }
+                    else if (operation.State == CoreWebView2DownloadState.Interrupted)
+                    {
+                        record.Operation = null;
+
+                        if (operation.InterruptReason == CoreWebView2DownloadInterruptReason.UserCanceled)
+                        {
+                            record.State = "cancelled";
+                        }
+                        else
+                        {
+                            record.State = "failed";
+                            record.Detail = InterruptText(operation.InterruptReason);
+                        }
+
+                        ChromeToast(record.FileName + ": " + record.StateText);
+                    }
+
+                    DownloadsManager.Current.SaveAndNotify();
+                };
+
+                ChromeToast("Downloading " + name);
+            }
+            catch
+            {
+                // Never leave a download hanging: let WebView2 take it.
+                e.Handled = false;
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
+        /// <summary>The size a download will be, or 0 while it is unknown.</summary>
+        private static long TotalOf(CoreWebView2DownloadOperation operation)
+        {
+            if (operation == null) return 0;
+            if (!operation.TotalBytesToReceive.HasValue) return 0;
+            return (long)operation.TotalBytesToReceive.Value;
+        }
+
+        private static string InterruptText(CoreWebView2DownloadInterruptReason reason)
+        {
+            switch (reason)
+            {
+                case CoreWebView2DownloadInterruptReason.NetworkFailed:
+                case CoreWebView2DownloadInterruptReason.NetworkDisconnected:
+                case CoreWebView2DownloadInterruptReason.NetworkTimeout:
+                case CoreWebView2DownloadInterruptReason.NetworkServerDown:
+                    return "Network problem";
+                case CoreWebView2DownloadInterruptReason.FileAccessDenied:
+                    return "No permission to save there";
+                case CoreWebView2DownloadInterruptReason.FileNoSpace:
+                    return "Not enough disk space";
+                case CoreWebView2DownloadInterruptReason.ServerUnauthorized:
+                    return "Sign-in required";
+                case CoreWebView2DownloadInterruptReason.ServerForbidden:
+                    return "Server refused the download";
+                case CoreWebView2DownloadInterruptReason.FileBlockedByPolicy:
+                    return "Blocked by policy";
+                default:
+                    return reason.ToString();
+            }
+        }
+
+        private string AskForSavePath(string folder, string name)
+        {
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = "Save As";
+                dialog.FileName = name;
+                if (Directory.Exists(folder)) dialog.InitialDirectory = folder;
+                dialog.OverwritePrompt = true;
+
+                if (dialog.ShowDialog(this) != DialogResult.OK) return null;
+                return dialog.FileName;
+            }
+        }
+
+        /// <summary>A path that does not already exist, so nothing is overwritten.</summary>
+        private static string UniquePath(string path)
+        {
+            if (!File.Exists(path)) return path;
+
+            string folder = Path.GetDirectoryName(path);
+            string name = Path.GetFileNameWithoutExtension(path);
+            string extension = Path.GetExtension(path);
+
+            for (int i = 1; i < 1000; i++)
+            {
+                string candidate = Path.Combine(folder, name + " (" + i + ")" + extension);
+                if (!File.Exists(candidate)) return candidate;
+            }
+
+            return path;
+        }
+
+        private static string DefaultDownloadFolder()
+        {
+            try
+            {
+                string folder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                return folder;
+            }
+            catch
+            {
+                return Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            }
+        }
+
+        /// <summary>Shows a short message in the toolbar's own toast.</summary>
+        private void ChromeToast(string message)
+        {
+            if (!_chromeReady || _chromeWebView.CoreWebView2 == null) return;
+
+            string literal = Json.Write(message ?? string.Empty);
+            if (literal == null) return;
+
+            _chromeWebView.CoreWebView2.ExecuteScriptAsync(
+                "window.BraveAPI && window.BraveAPI.toast(" + literal + ");");
         }
 
         /// <summary>
@@ -1585,6 +2657,25 @@ namespace SimpleBrowser
                     tab.RefreshSettingsStats();
                     break;
 
+                case "permissions":
+                    SendPermissions(tab);
+                    break;
+
+                case "perm_set":
+                    {
+                        var fields = Json.AsObject(Json.Parse(json));
+                        SetPermission(
+                            tab,
+                            Json.GetString(fields, "origin"),
+                            Json.GetString(fields, "kind"),
+                            Json.GetString(fields, "state"));
+                        break;
+                    }
+
+                case "perm_clear":
+                    ClearPermissions(tab);
+                    break;
+
                 case "reset":
                     Settings.Current.ResetToDefaults();
                     tab.ReloadSettingsPage();
@@ -1679,6 +2770,28 @@ namespace SimpleBrowser
                 case "bookmarks": ShowBookmarks(); break;
                 case "history": ShowHistory(); break;
                 case "shields": ShowBraveShields(); break;
+                case "defaultbrowser": SetAsDefaultBrowser(); break;
+            }
+        }
+
+        /// <summary>
+        /// Registers Aura with Windows and opens the page where the user makes
+        /// the choice. Windows will not let an app take the job silently, so the
+        /// best Aura can do is put itself on the list and say so.
+        /// </summary>
+        private void SetAsDefaultBrowser()
+        {
+            bool registered = DefaultBrowser.Register();
+            DefaultBrowser.OpenWindowsSettings();
+
+            if (!registered)
+            {
+                MessageBox.Show(this,
+                    "Aura could not register itself with Windows.\n\n" +
+                    "You can still choose a browser from the Windows Settings page that just opened.",
+                    "Default browser",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
         }
 
@@ -1746,15 +2859,18 @@ namespace SimpleBrowser
 
         private CoreWebView2Profile ProfileForData()
         {
-            if (_chromeWebView != null && _chromeWebView.CoreWebView2 != null)
-            {
-                return _chromeWebView.CoreWebView2.Profile;
-            }
-
+            // Prefer the page the user is looking at: in a private window that
+            // is the in-private profile, and clearing it must not touch the
+            // normal one.
             var tab = ActiveTab;
             if (tab != null && tab.WebView != null && tab.WebView.CoreWebView2 != null)
             {
                 return tab.WebView.CoreWebView2.Profile;
+            }
+
+            if (_chromeWebView != null && _chromeWebView.CoreWebView2 != null)
+            {
+                return _chromeWebView.CoreWebView2.Profile;
             }
 
             return null;
@@ -1906,6 +3022,24 @@ namespace SimpleBrowser
             var newTabItem = new ToolStripMenuItem("New Tab", null, delegate { AddNewTab(); });
             newTabItem.ShortcutKeyDisplayString = "Ctrl+T";
 
+            var newWindowItem = new ToolStripMenuItem("New Window", null, delegate { NewWindow(false); });
+            newWindowItem.ShortcutKeyDisplayString = "Ctrl+N";
+
+            var newPrivateItem = new ToolStripMenuItem("New Private Window", null, delegate { NewWindow(true); });
+            newPrivateItem.ShortcutKeyDisplayString = "Ctrl+Shift+N";
+
+            var reopenItem = new ToolStripMenuItem("Reopen Closed Tab", null, delegate { ReopenClosedTab(); });
+            reopenItem.ShortcutKeyDisplayString = "Ctrl+Shift+T";
+
+            var findItem = new ToolStripMenuItem("Find on Page\u2026", null, delegate
+            {
+                if (ActiveTab != null) ActiveTab.ToggleFind();
+            });
+            findItem.ShortcutKeyDisplayString = "Ctrl+F";
+
+            var downloadsItem = new ToolStripMenuItem("Downloads", null, delegate { ShowDownloads(); });
+            downloadsItem.ShortcutKeyDisplayString = "Ctrl+J";
+
             var bookmarksItem = new ToolStripMenuItem("Bookmark This Page\u2026", null, delegate { ToggleBookmarkCurrent(); });
             bookmarksItem.ShortcutKeyDisplayString = "Ctrl+D";
 
@@ -1954,6 +3088,8 @@ namespace SimpleBrowser
                 // This menu has no check margin, so the label carries the state.
                 bool bar = Settings.Current.ShowBookmarksBar;
                 bookmarksBarItem.Text = bar ? "Hide Bookmarks Bar" : "Show Bookmarks Bar";
+
+                reopenItem.Enabled = _closedTabs.Count > 0;
             };
 
             var aboutItem = new ToolStripMenuItem("About Aura", null, delegate { ShowAbout(); });
@@ -1963,6 +3099,13 @@ namespace SimpleBrowser
             var quitItem = new ToolStripMenuItem("Quit Aura", null, delegate { Close(); });
 
             menu.Items.Add(newTabItem);
+            menu.Items.Add(newWindowItem);
+            menu.Items.Add(newPrivateItem);
+            menu.Items.Add(reopenItem);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(findItem);
+            menu.Items.Add(downloadsItem);
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(bookmarksItem);
             menu.Items.Add(allBookmarksItem);
             menu.Items.Add(bookmarksBarItem);
@@ -2017,6 +3160,39 @@ namespace SimpleBrowser
             {
                 // Keeping the default maximize is better than failing to open.
             }
+        }
+
+        /// <summary>
+        /// A normal window that closes while it is the only one left has ended
+        /// the session in an orderly way, so the next run opens the start page
+        /// instead of offering to restore what a crash "left behind".
+        /// </summary>
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            base.OnFormClosing(e);
+
+            int remaining = 0;
+            foreach (var window in Windows)
+            {
+                if (window == this || window.IsDisposed) continue;
+                if (!window.IsPrivate) remaining++;
+            }
+
+            if (remaining == 0) SessionStore.MarkClean();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            Theme.Changed -= ApplyTheme;
+            Settings.Changed -= OnSettingsChanged;
+            if (_bookmarkManager != null) _bookmarkManager.Changed -= OnBookmarksChanged;
+            DownloadsManager.Current.Changed -= OnDownloadsChanged;
+
+            Windows.Remove(this);
+            try { Application.RemoveMessageFilter(_shortcuts); }
+            catch { }
+
+            base.OnFormClosed(e);
         }
 
         // Native Resizing

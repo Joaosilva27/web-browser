@@ -189,11 +189,33 @@ namespace SimpleBrowser
         public int Zoom
         {
             get { return Math.Max(50, Math.Min(200, Json.GetInt(_values, "zoom", 100))); }
-        }
-
-        public float ZoomFactor
+        }        public float ZoomFactor
         {
             get { return Zoom / 100f; }
+        }
+
+        // ── Startup and downloads ────────────────────────────────────────────
+
+        /// <summary>"home" opens the start page; "continue" reopens last run's tabs.</summary>
+        public string StartupMode
+        {
+            get
+            {
+                string mode = Json.GetString(_values, "startup");
+                return mode == "continue" ? "continue" : "home";
+            }
+        }
+
+        /// <summary>True when the user asked Aura to continue where they left off.</summary>
+        public bool StartupContinue
+        {
+            get { return StartupMode == "continue"; }
+        }
+
+        /// <summary>Ask for a folder for every download instead of using Downloads.</summary>
+        public bool AskDownloadPath
+        {
+            get { return Json.GetBool(_values, "askDownloadPath", false); }
         }
 
         // ── Changing ─────────────────────────────────────────────────────────
@@ -281,6 +303,16 @@ namespace SimpleBrowser
                         _values["zoom"] = Math.Max(50, Math.Min(200, RoundToStep(percent)));
                         break;
                     }
+                case "startup":
+                    {
+                        string mode = value as string;
+                        if (mode != "home" && mode != "continue") return false;
+                        _values["startup"] = mode;
+                        break;
+                    }
+                case "askdownloadpath":
+                    _values["askDownloadPath"] = AsBool(value, AskDownloadPath);
+                    break;
                 default:
                     return false;
             }
@@ -396,6 +428,8 @@ namespace SimpleBrowser
             _values["wallpaperBlur"] = 0;
             _values["wallpaperText"] = "auto";
             _values["zoom"] = 100;
+            _values["startup"] = "home";
+            _values["askDownloadPath"] = false;
         }
 
         private void Load()

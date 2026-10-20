@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -16,23 +17,98 @@ namespace SimpleBrowser
         private static extern bool SetProcessDPIAware();
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            EnableHighDpi();
+            Dpi.Init();
+            EnsureModernBrowserEmulation();
+
+            var launch = BrowserLaunch.Parse(args);
+
             try
             {
-                EnableHighDpi();
-                Dpi.Init();
-                EnsureModernBrowserEmulation();
-
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm());
+
+                // One copy per user session: a second launch posts what it was
+                // asked to open to the copy already running, and stops here.
+                if (!SingleInstance.Claim(launch, OpenFromHandOff)) return;
+
+                var windows = NewWindowsFor(launch);
+
+                // Every window after the first is shown before the message loop
+                // starts, with the first one left for Application.Run to own.
+                for (int i = 1; i < windows.Count; i++) windows[i].Show();
+
+                Application.Run(windows[0]);
             }
             catch (Exception ex)
             {
                 File.WriteAllText("crash.log", ex.ToString());
                 MessageBox.Show("Fatal Error: " + ex.ToString(), "Browser Crash", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        /// <summary>The windows this launch should open, already built.</summary>
+        private static List<MainForm> NewWindowsFor(BrowserLaunch launch)
+        {
+            var windows = new List<MainForm>();
+
+            if (launch.Private)
+            {
+                windows.Add(new MainForm(true));
+                return windows;
+            }
+
+            if (!string.IsNullOrEmpty(launch.Url))
+            {
+                windows.Add(new MainForm(false, new List<string> { launch.Url }, 0));
+                return windows;
+            }
+
+            // No page was named, so bring back the last session when there is
+            // one to bring back.
+            var restored = SessionStore.Restore();
+            if (restored != null)
+            {
+                foreach (var session in restored)
+                {
+                    windows.Add(new MainForm(false, session.Tabs, session.Active));
+                }
+            }
+
+            if (windows.Count == 0) windows.Add(new MainForm(false));
+            return windows;
+        }
+
+        /// <summary>
+        /// Opens a page a second copy of Aura handed over, in a window that is
+        /// already open where that makes sense.
+        /// </summary>
+        private static void OpenFromHandOff(BrowserLaunch launch)
+        {
+            if (launch == null) return;
+
+            if (launch.Private)
+            {
+                MainForm.NewWindow(true);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(launch.Url))
+            {
+                MainForm.NewWindow(false);
+                return;
+            }
+
+            var target = MainForm.Target;
+            if (!launch.NewWindow && target != null)
+            {
+                target.OpenUrl(launch.Url);
+                return;
+            }
+
+            MainForm.NewWindowWith(launch.Url);
         }
 
         /// <summary>
