@@ -68,17 +68,20 @@ namespace SimpleBrowser
     down.title = 'Next match';
     down.textContent = '\u2193';
 
-    var close = document.createElement('button');
-    close.className = 'btn';
-    close.title = 'Close';
-    close.textContent = '\u2715';
-    close.style.marginLeft = '4px';
+    // Named closeBtn rather than close: close() is the function that tears the
+    // bar down, and a second `close` would replace it with this button, leaving
+    // the bar with no way out.
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'btn';
+    closeBtn.title = 'Close';
+    closeBtn.textContent = '\u2715';
+    closeBtn.style.marginLeft = '4px';
 
     bar.appendChild(input);
     bar.appendChild(count);
     bar.appendChild(down);
     bar.appendChild(up);
-    bar.appendChild(close);
+    bar.appendChild(closeBtn);
     shadow.appendChild(style);
     shadow.appendChild(bar);
 
@@ -258,7 +261,7 @@ namespace SimpleBrowser
     down.addEventListener('mousedown', function (e) { e.preventDefault(); });
     up.addEventListener('click', function () { step(-1); input.focus(); });
     down.addEventListener('click', function () { step(1); input.focus(); });
-    close.addEventListener('click', function () { close(); });
+    closeBtn.addEventListener('click', function () { close(); });
 
     var seed = '';
     try {

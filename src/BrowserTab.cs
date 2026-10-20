@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -20,6 +21,13 @@ namespace SimpleBrowser
         private bool _openHomeCustomizerPending;
         private bool _isSettings;
         private bool _privateMode;
+
+        /// <summary>
+        /// Where the page was scrolled to, as last reported by the page. Hiding
+        /// a WebView2 to switch tabs makes the engine draw the page from the
+        /// top again, so the position is kept here and put back on return.
+        /// </summary>
+        private double _scrollY;
 
         public event Action<BrowserTab, string> UrlChanged;
         public event Action<BrowserTab, string> TitleChanged;
@@ -109,6 +117,7 @@ namespace SimpleBrowser
                 _webView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
 
                 _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+                await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(ScrollScript);
 
                 _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
                 _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
@@ -604,6 +613,7 @@ namespace SimpleBrowser
         private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
             _isLoading = true;
+            _scrollY = 0;
 
             if (!string.IsNullOrEmpty(e.Uri))
             {
@@ -794,11 +804,76 @@ namespace SimpleBrowser
         /// </summary>
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
+            string text = null;
+            try { text = e.TryGetWebMessageAsString(); }
+            catch { }
+
+            if (text != null && text.StartsWith(ScrollPrefix, StringComparison.Ordinal))
+            {
+                double y;
+                if (double.TryParse(
+                        text.Substring(ScrollPrefix.Length),
+                        NumberStyles.Float,
+                        CultureInfo.InvariantCulture,
+                        out y))
+                {
+                    _scrollY = y;
+                }
+
+                return;
+            }
+
             if (!_isSettings && !_isHome) return;
             if (!IsInternalSource(e.Source)) return;
 
             var handler = SettingsMessage;
             if (handler != null) handler(this, e.WebMessageAsJson);
+        }
+
+        private const string ScrollPrefix = "aura-scroll:";
+
+        /// <summary>
+        /// Reports where the page is scrolled, so a tab can be put back where it
+        /// was. It runs once per page and only speaks on scroll (one message per
+        /// animation frame at most), so it costs nothing while reading.
+        /// </summary>
+        private const string ScrollScript = @"(function () {
+    if (window.top !== window) { return; }
+    if (window.__auraScrollTrack) { return; }
+    window.__auraScrollTrack = true;
+
+    var queued = false;
+
+    function report() {
+        queued = false;
+        try { chrome.webview.postMessage('" + ScrollPrefix + @"' + window.scrollY); } catch (e) { }
+    }
+
+    window.addEventListener('scroll', function () {
+        if (queued) { return; }
+        queued = true;
+        requestAnimationFrame(report);
+    }, { passive: true });
+})();";
+
+        /// <summary>
+        /// Puts this tab back where the user left it. Called when the tab is
+        /// shown again; a tab that has never been scrolled is left alone.
+        /// </summary>
+        public void RestoreScroll()
+        {
+            if (_scrollY <= 1) return;
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.scrollTo(0," + _scrollY.ToString("0.###", CultureInfo.InvariantCulture) + ");");
+            }
+            catch
+            {
+                // A tab that is going away can refuse; nothing to restore.
+            }
         }
 
         private static bool IsInternalSource(string source)

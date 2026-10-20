@@ -207,6 +207,8 @@ namespace SimpleBrowser
                 SyncAllToChrome();
                 SyncPageFullScreen();
                 if (!_privateMode) SessionStore.Touch();
+
+                RestoreScrollOnShow();
             };
 
             _contentPanel.Controls.Add(_tabControl);
@@ -2027,6 +2029,30 @@ namespace SimpleBrowser
                 -insetTop,
                 w + insetLeft + insetRight,
                 h + insetTop + insetBottom);
+        }
+
+        /// <summary>
+        /// Puts the tab that just came forward back where it was. A WebView2
+        /// that has been hidden draws from the top again, so the jump is applied
+        /// once now and once more after the switch has settled.
+        /// </summary>
+        private void RestoreScrollOnShow()
+        {
+            var tab = ActiveTab;
+            if (tab == null) return;
+
+            tab.RestoreScroll();
+
+            var timer = new Timer();
+            timer.Interval = 70;
+            timer.Tick += delegate
+            {
+                timer.Stop();
+                timer.Dispose();
+
+                if (tab != null && !tab.IsDisposed && tab == ActiveTab) tab.RestoreScroll();
+            };
+            timer.Start();
         }
 
         private void CycleTab(int delta)
