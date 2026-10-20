@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -2415,6 +2416,13 @@ namespace SimpleBrowser
         private int _suggestY = -1;
         private int _suggestW;
 
+        /// <summary>Token of the newest network answer wanted; older ones expire.</summary>
+        private int _suggestFetchId;
+
+        /// <summary>Completions already fetched, so backspacing re-shows them instantly.</summary>
+        private readonly Dictionary<string, List<string>> _fetchedTerms =
+            new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>
         /// Builds the list that hangs under the address bar: the search first,
         /// then the pages the user has visited, saved or pinned that match.
@@ -2443,25 +2451,48 @@ namespace SimpleBrowser
             }
             else
             {
-                entries = BuildSuggestions(needle);
+                entries = BuildSuggestions(needle, null);
                 if (entries.Count == 0)
                 {
                     HideSuggestions();
                     return;
                 }
+
+                // The engine's own completions — the "how to open the door"
+                // lines the whole world searches — trail a moment later, as
+                // fast as the network answers.
+                FetchEngineSuggestions(needle);
             }
 
-            _suggestEntries = entries;
-            _suggestIndex = -1;
+            ShowEntryList(entries);
+        }
 
-            // The grey type-ahead that follows the caret: taken from the first
-            // page address that starts with what was typed. The search row
-            // never completes — words, not addresses, belong there.
+        /// <summary>A search row: its words show, its hidden Url is the engine's page.</summary>
+        private static SuggestEntry QueryEntry(SearchEngine engine, string term)
+        {
+            var entry = new SuggestEntry();
+            entry.IsSearch = true;
+            entry.Url = engine.Build(term);
+            entry.Term = term;
+            entry.Title = term;
+            entry.Detail = string.Empty;
+            return entry;
+        }
+
+        /// <summary>Everything a freshly built list needs: the ghost tail, the
+        /// row set, and the geometry of the hanging window.</summary>
+        private void ShowEntryList(List<SuggestEntry> entries)
+        {
+
+            // The grey type-ahead that follows the caret: the first row the
+            // typed text starts with, page or search words alike — but the
+            // headline "Search Brave for it" row never completes.
             string ghost = null;
             for (int i = 0; i < entries.Count; i++)
             {
-                if (entries[i].IsSearch) continue;
-                ghost = GhostRemainder(entries[i].Url, _suggestTyped);
+                SuggestEntry entry = entries[i];
+                string words = entry.IsSearch ? entry.Term : entry.Url;
+                ghost = GhostRemainder(words, _suggestTyped);
                 if (!string.IsNullOrEmpty(ghost)) break;
             }
             SendGhost(ghost);
@@ -2527,6 +2558,7 @@ namespace SimpleBrowser
 
             _suggestEntries = null;
             _suggestIndex = -1;
+            _suggestFetchId++;   // an answer still in flight is out of date now
             SendGhost(null);
         }
 
@@ -2571,6 +2603,105 @@ namespace SimpleBrowser
         }
 
         /// <summary>
+        /// Asks the search engine for completions of what was typed — the
+        /// "how to open the door" lines. The list is already on screen with
+        /// the local rows; when the answer lands the list is rebuilt with
+        /// them folded in. Private windows never send anything.
+        /// </summary>
+        private void FetchEngineSuggestions(string needle)
+        {
+            if (string.IsNullOrWhiteSpace(needle) || _privateMode) return;
+
+            SearchEngine engine = Settings.Current.Engine;
+            if (engine == null || string.IsNullOrEmpty(engine.SuggestEndpoint)) return;
+
+            List<string> known;
+            if (_fetchedTerms.TryGetValue(needle, out known))
+            {
+                ApplySearchSuggestions(needle, known);
+                return;
+            }
+
+            if (_fetchedTerms.Count > 96) _fetchedTerms.Clear();
+
+            int id = ++_suggestFetchId;
+            string endpoint = engine.SuggestEndpoint.Replace("{query}", Uri.EscapeDataString(needle));
+            SearchWords(id, needle, endpoint);
+        }
+
+        private async void SearchWords(int id, string needle, string endpoint)
+        {
+            List<string> terms = null;
+
+            try
+            {
+                var request = (HttpWebRequest)WebRequest.Create(endpoint);
+                request.Method = "GET";
+                request.Timeout = 3500;
+                request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Toge";
+
+                using (var response = await request.GetResponseAsync())
+                using (var stream = response.GetResponseStream())
+                using (var reader = new StreamReader(stream))
+                {
+                    terms = ParseSuggestions(reader.ReadToEnd());
+                }
+            }
+            catch
+            {
+                // Offline, slow, or a shape no one promised: the list that is
+                // already showing simply stays.
+            }
+
+            if (terms == null || _suggestTyped != needle || id != _suggestFetchId) return;
+
+            _fetchedTerms[needle] = terms;
+            ApplySearchSuggestions(needle, terms);
+        }
+        private void ApplySearchSuggestions(string needle, List<string> terms)
+        {
+            if (needle.Length == 0 || needle != _suggestTyped) return;
+
+            List<SuggestEntry> entries = BuildSuggestions(needle, terms);
+            if (entries.Count == 0) return;
+
+            ShowEntryList(entries);
+        }
+
+        /// <summary>
+        /// Firefox-style suggestion JSON — the typed words first, their
+        /// completions second — which Brave, Google, DuckDuckGo and Bing all
+        /// share. Anything else yields nothing rather than an error.
+        /// </summary>
+        private static List<string> ParseSuggestions(string json)
+        {
+            var terms = new List<string>();
+            if (string.IsNullOrEmpty(json)) return terms;
+
+            try
+            {
+                var answer = Json.AsList(Json.Parse(json));
+                if (answer == null || answer.Count < 2) return terms;
+
+                var completions = Json.AsList(answer[1]);
+                if (completions == null) return terms;
+
+                foreach (object item in completions)
+                {
+                    string term = item as string;
+                    if (!string.IsNullOrEmpty(term)) terms.Add(term);
+                    if (terms.Count >= 8) break;
+                }
+            }
+            catch
+            {
+                // Not the usual shape; the caller shows its local rows only.
+            }
+
+            return terms;
+        }
+
+        /// <summary>
         /// What a bare address field offers before anything is typed: the
         /// pages visited most recently, then the saved ones. Eight rows are
         /// plenty to say "this is where you usually go".
@@ -2609,19 +2740,46 @@ namespace SimpleBrowser
             FocusContent();
         }
 
-        private List<SuggestEntry> BuildSuggestions(string needle)
+        private List<SuggestEntry> BuildSuggestions(string needle, List<string> searchTerms)
         {
             var entries = new List<SuggestEntry>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
             var engine = Settings.Current.Engine;
 
-            var search = new SuggestEntry();
-            search.IsSearch = true;
-            search.Url = engine.Build(needle);
+            var search = QueryEntry(engine, needle);
             search.Title = "Search " + engine.ShortName + " for \u201c" + Shorten(needle, 48) + "\u201d";
-            search.Detail = string.Empty;
             entries.Add(search);
+
+            // Search words first — what the user asked for before, then what
+            // the engine says the whole world asks for. Address-like typing
+            // ("github.com") leaves most of the room to places to go.
+            var usedTerms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            usedTerms.Add(needle);
+
+            int searchCap;
+            if (needle.IndexOf(' ') >= 0) searchCap = 5;
+            else if (needle.IndexOf('.') >= 0) searchCap = 2;
+            else searchCap = 3;
+
+            foreach (var prior in _historyManager.GetSearches())
+            {
+                if (entries.Count > searchCap) break;
+                if (prior.Term == null) continue;
+                if (prior.Term.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!usedTerms.Add(prior.Term)) continue;
+                entries.Add(QueryEntry(engine, prior.Term));
+            }
+
+            if (searchTerms != null)
+            {
+                foreach (string term in searchTerms)
+                {
+                    if (string.IsNullOrEmpty(term)) continue;
+                    if (entries.Count > searchCap) break;
+                    if (!usedTerms.Add(term)) continue;
+                    entries.Add(QueryEntry(engine, term));
+                }
+            }
 
             // Recent pages first: what was just visited is usually what is meant.
             foreach (var item in _historyManager.GetHistory())

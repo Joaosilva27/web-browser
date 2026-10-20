@@ -21,6 +21,14 @@ namespace SimpleBrowser
         /// </summary>
         public string Template;
 
+        /// <summary>
+        /// The address of the engine's completion list, with {query} where the
+        /// half-typed words go. Google, Brave, DuckDuckGo and Bing all answer
+        /// the same Firefox-style JSON; engines without a known endpoint leave
+        /// this empty and offer no live suggestions.
+        /// </summary>
+        public string SuggestEndpoint;
+
         public string Build(string query)
         {
             string escaped = Uri.EscapeDataString(query);
@@ -62,10 +70,10 @@ namespace SimpleBrowser
 
         public static readonly SearchEngine[] Engines = new SearchEngine[]
         {
-            new SearchEngine { Id = "brave", Name = "Brave Search", ShortName = "Brave", BaseUrl = "https://search.brave.com/search", QueryParam = "q" },
-            new SearchEngine { Id = "google", Name = "Google", ShortName = "Google", BaseUrl = "https://www.google.com/search", QueryParam = "q" },
-            new SearchEngine { Id = "duckduckgo", Name = "DuckDuckGo", ShortName = "DuckDuckGo", BaseUrl = "https://duckduckgo.com/", QueryParam = "q" },
-            new SearchEngine { Id = "bing", Name = "Bing", ShortName = "Bing", BaseUrl = "https://www.bing.com/search", QueryParam = "q" },
+            new SearchEngine { Id = "brave", Name = "Brave Search", ShortName = "Brave", BaseUrl = "https://search.brave.com/search", QueryParam = "q", SuggestEndpoint = "https://search.brave.com/api/suggest?q={query}" },
+            new SearchEngine { Id = "google", Name = "Google", ShortName = "Google", BaseUrl = "https://www.google.com/search", QueryParam = "q", SuggestEndpoint = "https://suggestqueries.google.com/complete/search?client=firefox&q={query}" },
+            new SearchEngine { Id = "duckduckgo", Name = "DuckDuckGo", ShortName = "DuckDuckGo", BaseUrl = "https://duckduckgo.com/", QueryParam = "q", SuggestEndpoint = "https://duckduckgo.com/ac/?q={query}&type=list" },
+            new SearchEngine { Id = "bing", Name = "Bing", ShortName = "Bing", BaseUrl = "https://www.bing.com/search", QueryParam = "q", SuggestEndpoint = "https://api.bing.com/osjson.aspx?query={query}" },
             new SearchEngine { Id = "startpage", Name = "Startpage", ShortName = "Startpage", BaseUrl = "https://www.startpage.com/sp/search", QueryParam = "query" },
             new SearchEngine { Id = "ecosia", Name = "Ecosia", ShortName = "Ecosia", BaseUrl = "https://www.ecosia.org/search", QueryParam = "q" },
             new SearchEngine { Id = "youtube", Name = "YouTube", ShortName = "YouTube", BaseUrl = "https://www.youtube.com/results", QueryParam = "search_query" }

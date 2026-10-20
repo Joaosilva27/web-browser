@@ -16,6 +16,9 @@ namespace SimpleBrowser
         public string Url;
         public bool IsSearch;
 
+        /// <summary>The words of a search row, as opposed to its Url — the query the row completes.</summary>
+        public string Term;
+
         /// <summary>The site icon as a data URL; null draws the letter tile.</summary>
         public string IconDataUrl;
     }

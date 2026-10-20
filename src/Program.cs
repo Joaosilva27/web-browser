@@ -21,6 +21,20 @@ namespace SimpleBrowser
         {
             EnableHighDpi();
             Dpi.Init();
+
+            // Without a targetFramework attribute the engine offers the old
+            // ciphers only; modern suggestion endpoints want TLS 1.2.
+            try
+            {
+                System.Net.ServicePointManager.SecurityProtocol =
+                    System.Net.SecurityProtocolType.Tls12
+                    | System.Net.SecurityProtocolType.Tls11
+                    | System.Net.SecurityProtocolType.Tls;
+            }
+            catch
+            {
+            }
+
             EnsureModernBrowserEmulation();
             AppMigration.Migrate();
             GoogleAccount.Load();
