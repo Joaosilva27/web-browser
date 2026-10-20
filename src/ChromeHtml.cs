@@ -26,7 +26,7 @@ namespace SimpleBrowser
 <head>
 <meta charset='utf-8' />
 <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-<title>Aura</title>
+<title>Toge</title>
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -867,7 +867,7 @@ namespace SimpleBrowser
                 <span class='dl-count none' id='dl-count'>0</span>
             </button>
 
-            <div class='shields' id='btn-shields' title='Aura Shields' role='button' tabindex='0'>
+            <div class='shields' id='btn-shields' title='Toge Shields' role='button' tabindex='0'>
                 <svg viewBox='0 0 24 24'><path d='M12 3.2 5.2 6v5.3c0 4.35 2.9 7.6 6.8 9.5 3.9-1.9 6.8-5.15 6.8-9.5V6L12 3.2z'/></svg>
                 <span class='shield-count' id='shields-count'>0</span>
             </div>
@@ -1400,8 +1400,8 @@ namespace SimpleBrowser
                         fav.classList.add('plain');
                         fav.appendChild(icon);
                     } else if (!url) {
-                        fav.classList.add('home');
-                        fav.innerHTML = '<svg viewBox=""0 0 24 24""><circle cx=""12"" cy=""12"" r=""8""/><path d=""M4 12h16""/><path d=""M12 4c2.2 2.2 3.3 5 3.3 8s-1.1 5.8-3.3 8c-2.2-2.2-3.3-5-3.3-8s1.1-5.8 3.3-8z""/></svg>';
+                        fav.classList.add('plain');
+                        fav.innerHTML = '<img src=""__TOGE_MARK__"" alt="""" />';
                     } else {
                         fav.style.background = colorFor(host);
                         fav.textContent = (host.charAt(0) || 'A').toUpperCase();
@@ -1616,7 +1616,9 @@ namespace SimpleBrowser
 </body>
 </html>";
 
-            return html.Replace("__THEME__", dark ? "dark" : "light");
+            return html
+                .Replace("__THEME__", dark ? "dark" : "light")
+                .Replace("__TOGE_MARK__", AppIcon.MarkDataUrl);
         }
     }
 }

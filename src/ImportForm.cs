@@ -24,8 +24,8 @@ namespace SimpleBrowser
         private Label _availability;
         private Label _status;
         private Label _privacy;
-        private AuraButton _importButton;
-        private AuraButton _cancelButton;
+        private TogeButton _importButton;
+        private TogeButton _cancelButton;
         private bool _laidOut;
 
         /// <summary>True when the start page gained tiles, so the host can refresh it.</summary>
@@ -35,6 +35,7 @@ namespace SimpleBrowser
         {
             _bookmarks = bookmarks;
             _history = history;
+            AppIcon.Apply(this);
 
             Text = "Import Browser Data";
             AutoScaleMode = AutoScaleMode.None;
@@ -109,14 +110,14 @@ namespace SimpleBrowser
             _privacy = new Label();
             _privacy.Text = "Cookies and saved passwords cannot be imported: Chrome, Edge and Brave " +
                             "encrypt them with App-Bound Encryption, which only the browser that wrote " +
-                            "them can unlock. Sign in once in Aura and the session is kept.";
+                            "them can unlock. Sign in once in Toge and the session is kept.";
             _privacy.Font = new Font("Segoe UI", 8.25F);
             _privacy.ForeColor = Theme.TextTertiary;
             _privacy.AutoSize = false;
             _privacy.Location = new Point(Dpi.Px(26), Dpi.Px(386));
             _privacy.Size = new Size(Dpi.Px(548), Dpi.Px(46));
 
-            _cancelButton = new AuraButton();
+            _cancelButton = new TogeButton();
             _cancelButton.Text = "Cancel";
             _cancelButton.Size = new Size(Dpi.Px(100), Dpi.Px(34));
             _cancelButton.Radius = Dpi.Px(9);
@@ -124,7 +125,7 @@ namespace SimpleBrowser
             _cancelButton.ForeColor = Theme.TextPrimary;
             _cancelButton.Click += delegate { Close(); };
 
-            _importButton = new AuraButton();
+            _importButton = new TogeButton();
             _importButton.Text = "Import";
             _importButton.Size = new Size(Dpi.Px(124), Dpi.Px(34));
             _importButton.Radius = Dpi.Px(9);

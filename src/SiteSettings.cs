@@ -6,7 +6,7 @@ using System.IO;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// Choices that belong to one website rather than to Aura as a whole.
+    /// Choices that belong to one website rather than to Toge as a whole.
     ///
     /// Page zoom lives here, and only when the user has moved it for that site:
     /// everything else follows the Settings page, so a site nobody has touched
@@ -46,14 +46,14 @@ namespace SimpleBrowser
             _zoom = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             string appData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
             _filePath = Path.Combine(appData, "sites.json");
 
             Load();
         }
 
         /// <summary>
-        /// The site a URL belongs to, or an empty string for Aura's own pages.
+        /// The site a URL belongs to, or an empty string for Toge's own pages.
         /// www is dropped so a site is one entry whichever way it is reached.
         /// </summary>
         public static string HostOf(string url)

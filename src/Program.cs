@@ -22,6 +22,7 @@ namespace SimpleBrowser
             EnableHighDpi();
             Dpi.Init();
             EnsureModernBrowserEmulation();
+            AppMigration.Migrate();
 
             var launch = BrowserLaunch.Parse(args);
 
@@ -82,7 +83,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Opens a page a second copy of Aura handed over, in a window that is
+        /// Opens a page a second copy of Toge handed over, in a window that is
         /// already open where that makes sense.
         /// </summary>
         private static void OpenFromHandOff(BrowserLaunch launch)

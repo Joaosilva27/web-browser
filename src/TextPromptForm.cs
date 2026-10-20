@@ -7,7 +7,7 @@ namespace SimpleBrowser
     /// <summary>
     /// A small dialog that asks for one line of text: a new folder's name, or a
     /// new title for a bookmark. Windows' own InputBox is not in the framework,
-    /// and this matches the rest of Aura's dialogs.
+    /// and this matches the rest of Toge's dialogs.
     /// </summary>
     public class TextPromptForm : Form
     {
@@ -47,7 +47,7 @@ namespace SimpleBrowser
             _box.BackColor = Theme.IsDark ? Color.FromArgb(56, 56, 60) : Color.White;
             _box.ForeColor = Theme.TextPrimary;
 
-            var cancel = new AuraButton();
+            var cancel = new TogeButton();
             cancel.Text = "Cancel";
             cancel.Size = new Size(Dpi.Px(92), Dpi.Px(32));
             cancel.Radius = Dpi.Px(8);
@@ -61,7 +61,7 @@ namespace SimpleBrowser
                 Close();
             };
 
-            var accept = new AuraButton();
+            var accept = new TogeButton();
             accept.Text = string.IsNullOrEmpty(action) ? "Save" : action;
             accept.Size = new Size(Dpi.Px(104), Dpi.Px(32));
             accept.Radius = Dpi.Px(8);

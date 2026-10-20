@@ -15,7 +15,7 @@ namespace SimpleBrowser
         private static bool? _isDark;
         private static bool? _override;
 
-        private const string PreferenceKey = @"HKEY_CURRENT_USER\Software\Aura";
+        private const string PreferenceKey = @"HKEY_CURRENT_USER\Software\Toge";
 
         /// <summary>Raised after the light/dark preference changes.</summary>
         public static event Action Changed;

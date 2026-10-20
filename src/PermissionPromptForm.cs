@@ -6,7 +6,7 @@ using System.Windows.Forms;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// The card Aura puts up when a page asks for something of the user's — the
+    /// The card Toge puts up when a page asks for something of the user's — the
     /// camera, the microphone, their location. It replaces Chromium's own
     /// prompt, which would otherwise appear inside the page in another style.
     ///
@@ -54,14 +54,14 @@ namespace SimpleBrowser
             detail.Location = new Point(Dpi.Px(31), Dpi.Px(66));
 
             var note = new Label();
-            note.Text = "Aura will remember this choice. You can change it in Settings.";
+            note.Text = "Toge will remember this choice. You can change it in Settings.";
             note.Font = new Font("Segoe UI", 8.25F);
             note.ForeColor = Theme.TextTertiary;
             note.AutoSize = false;
             note.Size = new Size(Dpi.Px(372), Dpi.Px(20));
             note.Location = new Point(Dpi.Px(31), Dpi.Px(112));
 
-            var block = new AuraButton();
+            var block = new TogeButton();
             block.Text = "Block";
             block.Font = new Font("Segoe UI", 9.25F);
             block.Radius = Dpi.Px(8);
@@ -76,7 +76,7 @@ namespace SimpleBrowser
                 Close();
             };
 
-            var allow = new AuraButton();
+            var allow = new TogeButton();
             allow.Text = "Allow";
             allow.Font = new Font("Segoe UI", 9.25F);
             allow.Radius = Dpi.Px(8);

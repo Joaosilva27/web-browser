@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ============================================
-echo   Building Brave Browser Desktop...
+echo   Building Toge...
 echo ============================================
 
 if not exist bin mkdir bin
@@ -23,10 +23,10 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AuraBrowser.exe /r:System.dll,System.Core.dll,System.Windows.Forms.dll,System.Drawing.dll,Microsoft.CSharp.dll,System.Web.Extensions.dll,lib\Microsoft.Web.WebView2.WinForms.dll,lib\Microsoft.Web.WebView2.Core.dll src\*.cs
+"%CSC%" /nologo /target:winexe /optimize+ /out:bin\Toge.exe /win32icon:assets\toge.ico /resource:assets\toge.ico,toge.ico /r:System.dll,System.Core.dll,System.Windows.Forms.dll,System.Drawing.dll,Microsoft.CSharp.dll,System.Web.Extensions.dll,lib\Microsoft.Web.WebView2.WinForms.dll,lib\Microsoft.Web.WebView2.Core.dll src\*.cs
 
 if %ERRORLEVEL% EQU 0 (
-    echo [SUCCESS] Built successfully: bin\AuraBrowser.exe
+    echo [SUCCESS] Built successfully: bin\Toge.exe
 ) else (
     echo [FAILED] Compilation failed with error code %ERRORLEVEL%
 )

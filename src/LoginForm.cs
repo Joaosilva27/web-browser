@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// The card Aura puts up when a page is behind a login the engine cannot
+    /// The card Toge puts up when a page is behind a login the engine cannot
     /// answer on its own. Nothing is remembered: the credentials go straight to
     /// the page's own challenge and are never written to disk.
     /// </summary>
@@ -64,7 +64,7 @@ namespace SimpleBrowser
             var userLabel = FieldLabel("Name", Dpi.Px(100));
             var passwordLabel = FieldLabel("Password", Dpi.Px(156));
 
-            var cancel = new AuraButton();
+            var cancel = new TogeButton();
             cancel.Text = "Cancel";
             cancel.Font = new Font("Segoe UI", 9.25F);
             cancel.Radius = Dpi.Px(8);
@@ -78,7 +78,7 @@ namespace SimpleBrowser
                 Close();
             };
 
-            var ok = new AuraButton();
+            var ok = new TogeButton();
             ok.Text = "Sign in";
             ok.Font = new Font("Segoe UI", 9.25F);
             ok.Radius = Dpi.Px(8);

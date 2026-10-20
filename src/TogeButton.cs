@@ -5,15 +5,15 @@ using System.Windows.Forms;
 
 namespace SimpleBrowser
 {
-    /// <summary>A flat, rounded button that matches the Aura surfaces.</summary>
-    public class AuraButton : Button
+    /// <summary>A flat, rounded button that matches the Toge surfaces.</summary>
+    public class TogeButton : Button
     {
         private bool _hover;
         private bool _pressed;
 
         public int Radius { get; set; }
 
-        public AuraButton()
+        public TogeButton()
         {
             Radius = 9;
             SetStyle(ControlStyles.UserPaint

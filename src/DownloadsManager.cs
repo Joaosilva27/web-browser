@@ -78,7 +78,7 @@ namespace SimpleBrowser
 
     /// <summary>
     /// The downloads list, shared by every window and remembered between runs
-    /// (%APPDATA%\AuraBrowser\downloads.json). A download in progress is live in
+    /// (%APPDATA%\Toge\downloads.json). A download in progress is live in
     /// memory as well as on disk, so the list and the toolbar badge follow it.
     /// </summary>
     public class DownloadsManager
@@ -104,7 +104,7 @@ namespace SimpleBrowser
         public DownloadsManager()
         {
             string appData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
             _filePath = Path.Combine(appData, "downloads.json");
         }
 
@@ -279,7 +279,7 @@ namespace SimpleBrowser
                     record.Detail = Json.GetString(map, "detail");
                     record.StartedAt = ReadDate(map, "startedAt");
 
-                    // A download that was running when Aura closed never
+                    // A download that was running when Toge closed never
                     // finished, so it is shown as interrupted rather than live.
                     if (record.State == "progress" || record.State == "paused")
                     {

@@ -7,11 +7,12 @@ namespace SimpleBrowser
     public class SourceViewerForm : Form
     {
         private TextBox _textBox;
-        private AuraButton _copyButton;
+        private TogeButton _copyButton;
         private Label _infoLabel;
 
         public SourceViewerForm(string url, string htmlSource)
         {
+            AppIcon.Apply(this);
             Text = "Page Source";
             AutoScaleMode = AutoScaleMode.None;
             Size = new Size(Dpi.Px(900), Dpi.Px(660));
@@ -51,7 +52,7 @@ namespace SimpleBrowser
             subtitle.AutoSize = true;
             subtitle.Location = new Point(Dpi.Px(21), Dpi.Px(34));
 
-            _copyButton = new AuraButton();
+            _copyButton = new TogeButton();
             _copyButton.Text = "Copy";
             _copyButton.Size = new Size(Dpi.Px(88), Dpi.Px(32));
             _copyButton.Radius = Dpi.Px(8);

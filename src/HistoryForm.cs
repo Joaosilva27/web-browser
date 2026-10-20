@@ -18,14 +18,15 @@ namespace SimpleBrowser
         private ListView _searchList;
         private TextBox _searchBox;
         private Label _countLabel;
-        private AuraButton _historyTab;
-        private AuraButton _searchTab;
+        private TogeButton _historyTab;
+        private TogeButton _searchTab;
 
         public string SelectedUrl { get; private set; }
 
         public HistoryForm(HistoryManager historyManager)
         {
             _historyManager = historyManager;
+            AppIcon.Apply(this);
 
             Text = "History";
             AutoScaleMode = AutoScaleMode.None;
@@ -57,14 +58,14 @@ namespace SimpleBrowser
             title.Location = new Point(Dpi.Px(20), Dpi.Px(16));
 
             // Segmented switch between browsing history and search terms.
-            _historyTab = new AuraButton();
+            _historyTab = new TogeButton();
             _historyTab.Text = "History";
             _historyTab.Size = new Size(Dpi.Px(90), Dpi.Px(32));
             _historyTab.Radius = Dpi.Px(8);
             _historyTab.Location = new Point(Dpi.Px(126), Dpi.Px(17));
             _historyTab.Click += delegate { ShowTab(true); };
 
-            _searchTab = new AuraButton();
+            _searchTab = new TogeButton();
             _searchTab.Text = "Search history";
             _searchTab.Size = new Size(Dpi.Px(126), Dpi.Px(32));
             _searchTab.Radius = Dpi.Px(8);
@@ -96,7 +97,7 @@ namespace SimpleBrowser
             _countLabel.AutoSize = true;
             _countLabel.Location = new Point(Dpi.Px(364), Dpi.Px(52));
 
-            var openBtn = new AuraButton();
+            var openBtn = new TogeButton();
             openBtn.Text = "Open";
             openBtn.Size = new Size(Dpi.Px(96), Dpi.Px(32));
             openBtn.Radius = Dpi.Px(8);
@@ -105,7 +106,7 @@ namespace SimpleBrowser
             openBtn.Location = new Point(topPanel.Width - Dpi.Px(136), Dpi.Px(17));
             openBtn.Click += delegate { OpenSelected(); };
 
-            var clearBtn = new AuraButton();
+            var clearBtn = new TogeButton();
             clearBtn.Text = "Clear";
             clearBtn.Size = new Size(Dpi.Px(88), Dpi.Px(32));
             clearBtn.Radius = Dpi.Px(8);

@@ -49,7 +49,7 @@ namespace SimpleBrowser
         public HistoryManager()
         {
             string appData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
             if (!Directory.Exists(appData))
             {
                 Directory.CreateDirectory(appData);
@@ -100,7 +100,7 @@ namespace SimpleBrowser
         {
             if (items == null) return 0;
 
-            // Keep every local visit: the imported set must not erase what Aura saw.
+            // Keep every local visit: the imported set must not erase what Toge saw.
             var byUrl = new Dictionary<string, HistoryItem>(StringComparer.OrdinalIgnoreCase);
             var merged = new List<HistoryItem>(_history);
 

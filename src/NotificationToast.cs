@@ -6,7 +6,7 @@ using System.Windows.Forms;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// The card Aura shows when a site sends a notification it was allowed to
+    /// The card Toge shows when a site sends a notification it was allowed to
     /// send. Chromium has no notification UI of its own inside WebView2, so
     /// without this the permission prompt would be a promise nothing keeps.
     ///

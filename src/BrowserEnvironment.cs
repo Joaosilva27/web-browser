@@ -10,7 +10,7 @@ namespace SimpleBrowser
     /// <summary>
     /// The one WebView2 environment shared by the chrome and every tab.
     ///
-    /// The user data folder is persistent, and that is what makes Aura remember
+    /// The user data folder is persistent, and that is what makes Toge remember
     /// things between runs: sign-in cookies, saved logins, localStorage,
     /// IndexedDB, HTTP auth and the HTTP cache all live there. Every WebView2
     /// created for this profile must come from this environment, because
@@ -28,7 +28,7 @@ namespace SimpleBrowser
             {
                 return Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "AuraBrowser",
+                    "Toge",
                     "WebView2Profile");
             }
         }
@@ -88,7 +88,7 @@ namespace SimpleBrowser
         /// The controller behind a WinForms WebView2 control.
         ///
         /// The control keeps its controller private, and the controller is the
-        /// only place the accelerator-key event exists. Without it Aura could not
+        /// only place the accelerator-key event exists. Without it Toge could not
         /// answer Ctrl+F or Ctrl+T while a page has focus: the keys never reach
         /// the application's message filter, because the engine consumes them
         /// first. The SDK is fixed at the version in lib, so the field is stable;

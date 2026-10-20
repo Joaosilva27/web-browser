@@ -7,7 +7,7 @@ using System.Web.Script.Serialization;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// Thin wrapper over the framework's JavaScriptSerializer. Used for Aura's
+    /// Thin wrapper over the framework's JavaScriptSerializer. Used for Toge's
     /// own small data files (bookmarks, favourites) and for reading another
     /// browser's bookmark JSON. Serialization produces whatever the framework
     /// serializer produces, so it is always safe to read back with Parse.

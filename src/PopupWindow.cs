@@ -21,6 +21,7 @@ namespace SimpleBrowser
 
         public PopupWindow()
         {
+            AppIcon.Apply(this);
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.Sizable;
             StartPosition = FormStartPosition.CenterParent;
@@ -30,7 +31,7 @@ namespace SimpleBrowser
             Size = new Size(Dpi.Px(520), Dpi.Px(660));
             MinimumSize = new Size(Dpi.Px(320), Dpi.Px(280));
             BackColor = Theme.WindowBackground;
-            Text = "Aura";
+            Text = "Toge";
 
             _webView = new WebView2();
             _webView.Dock = DockStyle.Fill;
@@ -88,7 +89,7 @@ namespace SimpleBrowser
                 try
                 {
                     string title = core.DocumentTitle;
-                    Text = string.IsNullOrEmpty(title) ? "Aura" : title;
+                    Text = string.IsNullOrEmpty(title) ? "Toge" : title;
                 }
                 catch { }
             };
@@ -96,7 +97,7 @@ namespace SimpleBrowser
 
         /// <summary>
         /// WebView2 applies the page's requested window geometry itself and can
-        /// leave the window at the default cascade spot; put it over Aura instead.
+        /// leave the window at the default cascade spot; put it over Toge instead.
         /// </summary>
         public void CenterOnOwner()
         {

@@ -40,7 +40,7 @@ namespace SimpleBrowser
     }
 
     /// <summary>
-    /// Aura's bookmarks, stored as JSON so titles and addresses may contain any
+    /// Toge's bookmarks, stored as JSON so titles and addresses may contain any
     /// character and so the folder structure survives.
     ///
     /// Folders are paths ("Reading", "Reading/News") held in their own list as
@@ -61,7 +61,7 @@ namespace SimpleBrowser
         public BookmarkManager()
         {
             string appData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
             if (!Directory.Exists(appData))
             {
                 Directory.CreateDirectory(appData);

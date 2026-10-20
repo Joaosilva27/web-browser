@@ -14,6 +14,7 @@ namespace SimpleBrowser
 <meta charset='utf-8' />
 <meta name='viewport' content='width=device-width, initial-scale=1.0' />
 <title>New Tab</title>
+<link rel='icon' type='image/png' href='__TOGE_MARK__' />
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -872,10 +873,10 @@ namespace SimpleBrowser
 <div class='footer'>
     <div class='brand'>
         <svg viewBox='0 0 24 24'><path d='M12 3.2 5.2 6v5.3c0 4.35 2.9 7.6 6.8 9.5 3.9-1.9 6.8-5.15 6.8-9.5V6L12 3.2z'/></svg>
-        Aura
+        Toge
     </div>
     <div class='shields-note'>
-        <span class='dot'></span><span id='shields'>Aura Shields are active</span>
+        <span class='dot'></span><span id='shields'>Toge Shields are active</span>
     </div>
 </div>
 
@@ -1000,7 +1001,7 @@ namespace SimpleBrowser
 <div class='toast' id='toast'></div>
 
 <script>
-var AuraHome = (function () {
+var TogeHome = (function () {
     'use strict';
 
     var state = null;
@@ -1067,7 +1068,7 @@ var AuraHome = (function () {
         }
 
         var blur = w.blur || 0;
-        if (blur > 0 && w.type !== 'aura') {
+        if (blur > 0 && w.type !== 'toge') {
             wall.style.filter = 'blur(' + blur + 'px)';
             wall.style.transform = 'scale(1.06)';
         }
@@ -1418,9 +1419,9 @@ var AuraHome = (function () {
         var plain = document.createElement('button');
         plain.className = 'swatch default-swatch';
         plain.type = 'button';
-        plain.title = 'Aura';
-        plain.textContent = 'Aura';
-        plain.setAttribute('data-kind', 'aura');
+        plain.title = 'Toge';
+        plain.textContent = 'Toge';
+        plain.setAttribute('data-kind', 'toge');
         plain.setAttribute('data-value', '');
         box.appendChild(plain);
 
@@ -1467,7 +1468,7 @@ var AuraHome = (function () {
         for (var i = 0; i < all.length; i++) {
             var kind = all[i].getAttribute('data-kind');
             var value = all[i].getAttribute('data-value');
-            var on = kind === w.type && (kind === 'aura' || kind === 'image' || value === (w.value || '').toLowerCase());
+            var on = kind === w.type && (kind === 'toge' || kind === 'image' || value === (w.value || '').toLowerCase());
             all[i].classList.toggle('on', !!on);
         }
     }
@@ -1491,7 +1492,7 @@ var AuraHome = (function () {
             options[i].classList.toggle('on', options[i].getAttribute('data-value') === (state.wallpaperText || 'auto'));
         }
 
-        byId('wall-name').textContent = 'Showing: ' + (w.name || 'Aura');
+        byId('wall-name').textContent = 'Showing: ' + (w.name || 'Toge');
         markSwatch();
     }
 
@@ -1524,7 +1525,7 @@ var AuraHome = (function () {
         document.body.classList.toggle('dark', !!state.dark);
         document.body.classList.toggle('light', !state.dark);
 
-        byId('shields').textContent = state.shields || 'Aura Shields are active';
+        byId('shields').textContent = state.shields || 'Toge Shields are active';
 
         if (!swatchesBuilt) buildSwatches();
 
@@ -1580,8 +1581,8 @@ var AuraHome = (function () {
             post({ action: 'home_wallpaper_pick' });
             return;
         }
-        if (kind === 'aura') {
-            setWallpaper('aura', '');
+        if (kind === 'toge') {
+            setWallpaper('toge', '');
             return;
         }
         setWallpaper(kind, value);
@@ -1592,7 +1593,7 @@ var AuraHome = (function () {
     });
 
     byId('wall-none').addEventListener('click', function () {
-        setWallpaper('aura', '');
+        setWallpaper('toge', '');
     });
 
     byId('wall-url-go').addEventListener('click', function () {
@@ -1738,13 +1739,14 @@ var AuraHome = (function () {
     };
 })();
 
-AuraHome.apply(__STATE__);
+TogeHome.apply(__STATE__);
 </script>
 </body>
 </html>";
 
             return html
                 .Replace("__THEME__", dark ? "dark" : "light")
+                .Replace("__TOGE_MARK__", AppIcon.MarkDataUrl)
                 .Replace("__STATE__", StateJson());
         }
 
@@ -1832,7 +1834,7 @@ AuraHome.apply(__STATE__);
             int blocked = AdBlocker.BlockedCount;
             return blocked > 0
                 ? blocked.ToString("N0") + " trackers & ads blocked this session"
-                : "Aura Shields are active";
+                : "Toge Shields are active";
         }
     }
 }

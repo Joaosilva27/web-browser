@@ -23,11 +23,11 @@ namespace SimpleBrowser
     }
 
     /// <summary>
-    /// Remembers the tabs that were open, so Aura can offer to bring them back
+    /// Remembers the tabs that were open, so Toge can offer to bring them back
     /// after a crash and continue where the user left off if that is what they
     /// asked for on the settings page.
     ///
-    /// The file (%APPDATA%\AuraBrowser\session.json) also carries a "clean"
+    /// The file (%APPDATA%\Toge\session.json) also carries a "clean"
     /// flag: it is written false the moment a session starts and true only when
     /// every window has closed in an orderly way. A file that is still false at
     /// startup is what a crash looks like.
@@ -44,7 +44,7 @@ namespace SimpleBrowser
             {
                 return Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "AuraBrowser",
+                    "Toge",
                     "session.json");
             }
         }

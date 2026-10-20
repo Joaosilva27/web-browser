@@ -15,7 +15,7 @@ namespace SimpleBrowser
     /// Filter sources, in order of preference:
     ///   1. Bundled lists next to the executable  (bin\filters\*.adblock)
     ///   2. Bundled lists in the source tree       (scripts\*.adblock)
-    ///   3. Downloaded + cached lists              (%APPDATA%\AuraBrowser\filters\*.txt)
+    ///   3. Downloaded + cached lists              (%APPDATA%\Toge\filters\*.txt)
     ///
     /// Supported filter syntax (the useful subset of Adblock Plus / uBlock Origin):
     ///   ! comment, [Adblock Plus 2.0]
@@ -149,7 +149,7 @@ namespace SimpleBrowser
 
             Thread worker = new Thread(LoadEverything);
             worker.IsBackground = true;
-            worker.Name = "AuraShields";
+            worker.Name = "TogeShields";
             worker.Start();
         }
 
@@ -452,7 +452,7 @@ namespace SimpleBrowser
         {
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "AuraBrowser",
+                "Toge",
                 "filters");
 
             if (!Directory.Exists(dir))
@@ -509,7 +509,7 @@ namespace SimpleBrowser
 
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "GET";
-            request.UserAgent = "AuraBrowser/1.0 (+adblock)";
+            request.UserAgent = "Toge/1.0 (+adblock)";
             request.Timeout = DownloadTimeoutMs;
             request.ReadWriteTimeout = DownloadTimeoutMs;
             request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
@@ -1137,8 +1137,8 @@ namespace SimpleBrowser
 (function () {
     'use strict';
 
-    if (window.__auraShields) { return; }
-    window.__auraShields = true;
+    if (window.__togeShields) { return; }
+    window.__togeShields = true;
 
     // ---- Element hiding rules -------------------------------------------
     var CSS_SELECTORS = [
@@ -1228,9 +1228,9 @@ namespace SimpleBrowser
 
     function injectCss() {
         if (!document.documentElement) { return; }
-        if (document.getElementById('__aura_shields_css')) { return; }
+        if (document.getElementById('__toge_shields_css')) { return; }
         var style = document.createElement('style');
-        style.id = '__aura_shields_css';
+        style.id = '__toge_shields_css';
         style.type = 'text/css';
         style.textContent = CSS_SELECTORS.join(',') + '{display:none !important;}';
         (document.head || document.documentElement).appendChild(style);
@@ -1266,7 +1266,7 @@ namespace SimpleBrowser
     var nativeOpen = window.open;
     window.open = function (url) {
         if (typeof url === 'string' && isAdUrl(url)) {
-            try { console.log('[Aura Shields] blocked popup: ' + url); } catch (e) {}
+            try { console.log('[Toge Shields] blocked popup: ' + url); } catch (e) {}
             return null;
         }
         return nativeOpen.apply(window, arguments);
@@ -1298,8 +1298,8 @@ namespace SimpleBrowser
     }
 
     function installPlayerResponseTrap() {
-        if (!isYouTube() || window.__auraYtTrap) { return; }
-        window.__auraYtTrap = true;
+        if (!isYouTube() || window.__togeYtTrap) { return; }
+        window.__togeYtTrap = true;
 
         var stored = null;
 
@@ -1384,8 +1384,8 @@ namespace SimpleBrowser
 
         installPlayerResponseTrap();
 
-        if (window.__auraYtWatch) { return; }
-        window.__auraYtWatch = true;
+        if (window.__togeYtWatch) { return; }
+        window.__togeYtWatch = true;
 
         setInterval(killYouTubeAd, 250);
 

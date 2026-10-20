@@ -1,15 +1,15 @@
 @echo off
 setlocal
 
-if not exist bin\AuraBrowser.exe (
+if not exist bin\Toge.exe (
     call build.bat
 )
 
-if exist bin\AuraBrowser.exe (
-    echo Launching Brave Browser Desktop...
-    start "" bin\AuraBrowser.exe
+if exist bin\Toge.exe (
+    echo Launching Toge...
+    start "" bin\Toge.exe
 ) else (
-    echo [ERROR] bin\AuraBrowser.exe not found!
+    echo [ERROR] bin\Toge.exe not found!
     pause
 )
 

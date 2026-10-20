@@ -21,7 +21,7 @@ namespace SimpleBrowser
             DoubleBuffered = true;
 
             var title = new Label();
-            title.Text = "Aura Shields";
+            title.Text = "Toge Shields";
             title.Font = new Font("Segoe UI Semibold", 12.5F);
             title.ForeColor = Theme.TextPrimary;
             title.AutoSize = true;
@@ -87,7 +87,7 @@ namespace SimpleBrowser
             list.Size = new Size(Dpi.Px(300), Dpi.Px(82));
             list.Location = new Point(Dpi.Px(22), Dpi.Px(308));
 
-            var done = new AuraButton();
+            var done = new TogeButton();
             done.Text = "Done";
             done.Size = new Size(Dpi.Px(312), Dpi.Px(38));
             done.Location = new Point(Dpi.Px(16), Dpi.Px(410));

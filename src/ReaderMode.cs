@@ -1,7 +1,7 @@
 namespace SimpleBrowser
 {
     /// <summary>
-    /// Aura's reader view.
+    /// Toge's reader view.
     ///
     /// One script, sent to the page when the reader is asked for. It finds the
     /// part of the page that reads like an article and lays a clean sheet over
@@ -15,8 +15,8 @@ namespace SimpleBrowser
     {
         public static string Script(bool dark)
         {
-            return "window.AuraReaderDark = " + (dark ? "true" : "false") + ";\n"
-                 + "window.AuraReaderCss = \"" + Json.Escape(Css) + "\";\n"
+            return "window.TogeReaderDark = " + (dark ? "true" : "false") + ";\n"
+                 + "window.TogeReaderCss = \"" + Json.Escape(Css) + "\";\n"
                  + Js;
         }
 
@@ -139,8 +139,8 @@ namespace SimpleBrowser
 ";
 
         private const string Js = @"(function () {
-    var ID = 'aura-reader';
-    var H = window.AuraReader || (window.AuraReader = {});
+    var ID = 'toge-reader';
+    var H = window.TogeReader || (window.TogeReader = {});
 
     if (!H.ready) {
         H.ready = true;
@@ -156,7 +156,7 @@ namespace SimpleBrowser
             var lock = H.byId(ID + '-lock');
             if (lock && lock.parentNode) lock.parentNode.removeChild(lock);
 
-            if (document.documentElement) document.documentElement.classList.remove('aura-reader-open');
+            if (document.documentElement) document.documentElement.classList.remove('toge-reader-open');
 
             document.removeEventListener('click', H.block, true);
             document.removeEventListener('keydown', H.key, true);
@@ -224,7 +224,7 @@ namespace SimpleBrowser
 
     if (H.byId(ID)) { H.close(); return 'hidden'; }
 
-    if (!H.theme) H.theme = window.AuraReaderDark ? 'dark' : 'light';
+    if (!H.theme) H.theme = window.TogeReaderDark ? 'dark' : 'light';
 
     function readerButton(act, label, title) {
         var button = document.createElement('button');
@@ -425,7 +425,7 @@ namespace SimpleBrowser
     var shadow = host.attachShadow({ mode: 'open' });
 
     var style = document.createElement('style');
-    style.textContent = window.AuraReaderCss || '';
+    style.textContent = window.TogeReaderCss || '';
 
     var head = document.createElement('div');
     head.className = 'r-bar';
@@ -440,7 +440,7 @@ namespace SimpleBrowser
 
     var site = document.createElement('span');
     site.className = 'r-site';
-    site.textContent = location.hostname || 'Aura';
+    site.textContent = location.hostname || 'Toge';
     left.appendChild(site);
 
     var right = document.createElement('div');
@@ -483,9 +483,9 @@ namespace SimpleBrowser
        scrollbar of its own next to it. */
     var lock = document.createElement('style');
     lock.id = ID + '-lock';
-    lock.textContent = 'html.aura-reader-open, html.aura-reader-open body { overflow: hidden !important; }';
+    lock.textContent = 'html.toge-reader-open, html.toge-reader-open body { overflow: hidden !important; }';
     document.head.appendChild(lock);
-    document.documentElement.classList.add('aura-reader-open');
+    document.documentElement.classList.add('toge-reader-open');
 
     shadow.addEventListener('click', function (e) {
         var button = e.target && e.target.closest ? e.target.closest('[data-act]') : null;

@@ -5,21 +5,21 @@ using Microsoft.Win32;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// Aura as the system's default browser.
+    /// Toge as the system's default browser.
     ///
-    /// Windows no longer lets an app quietly take the job over, so Aura writes
+    /// Windows no longer lets an app quietly take the job over, so Toge writes
     /// its registration under HKCU (which needs no administrator rights) and
     /// then opens the Windows page where the user does the picking. Everything
-    /// here is about being honest about that: Aura can say where things stand,
+    /// here is about being honest about that: Toge can say where things stand,
     /// and it can take the user to the place the choice is actually made.
     /// </summary>
     public static class DefaultBrowser
     {
         /// <summary>The key Windows records the user's choice under.</summary>
-        private const string ProgId = "AuraBrowser";
-        private const string AppName = "Aura";
+        private const string ProgId = "Toge";
+        private const string AppName = "Toge";
 
-        /// <summary>True when links currently open in Aura.</summary>
+        /// <summary>True when links currently open in Toge.</summary>
         public static bool IsDefault()
         {
             string http = ProgIdFor("http");
@@ -46,7 +46,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Writes the registration Windows reads to list Aura as a browser.
+        /// Writes the registration Windows reads to list Toge as a browser.
         /// The user still has to choose it; this only makes it choosable.
         /// </summary>
         public static bool Register()
@@ -74,7 +74,7 @@ namespace SimpleBrowser
                 {
                     if (capabilities == null) return false;
                     capabilities.SetValue("ApplicationName", AppName);
-                    capabilities.SetValue("ApplicationDescription", "Aura, a fast browser");
+                    capabilities.SetValue("ApplicationDescription", "Toge, a fast browser");
                 }
 
                 using (var urls = Registry.CurrentUser.CreateSubKey(

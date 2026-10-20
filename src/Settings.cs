@@ -36,7 +36,7 @@ namespace SimpleBrowser
 
     /// <summary>
     /// Everything the user can tune, in one file
-    /// (%APPDATA%\AuraBrowser\settings.json).
+    /// (%APPDATA%\Toge\settings.json).
     ///
     /// Values are kept as a loose dictionary rather than properties so that
     /// reading the file can never fail on a missing or mistyped entry: an
@@ -78,7 +78,7 @@ namespace SimpleBrowser
         public Settings()
         {
             string appData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
             if (!Directory.Exists(appData))
             {
                 Directory.CreateDirectory(appData);
@@ -205,14 +205,14 @@ namespace SimpleBrowser
 
         // ── Start-page wallpaper ─────────────────────────────────────────────
 
-        /// <summary>"aura" (the default), "gradient", "color" or "image".</summary>
+        /// <summary>"toge" (the default), "gradient", "color" or "image".</summary>
         public string WallpaperType
         {
             get
             {
                 string type = Json.GetString(_values, "wallpaperType");
                 if (type == "gradient" || type == "color" || type == "image") return type;
-                return "aura";
+                return "toge";
             }
         }
 
@@ -266,7 +266,7 @@ namespace SimpleBrowser
             }
         }
 
-        /// <summary>True when the user asked Aura to continue where they left off.</summary>
+        /// <summary>True when the user asked Toge to continue where they left off.</summary>
         public bool StartupContinue
         {
             get { return StartupMode == "continue"; }
@@ -352,7 +352,7 @@ namespace SimpleBrowser
                 case "wallpapertype":
                     {
                         string type = value as string;
-                        if (type != "aura" && type != "gradient" && type != "color" && type != "image") return false;
+                        if (type != "toge" && type != "gradient" && type != "color" && type != "image") return false;
                         _values["wallpaperType"] = type;
                         break;
                     }
@@ -503,7 +503,7 @@ namespace SimpleBrowser
             _values["showTiles"] = true;
             _values["bookmarksBar"] = true;
             _values["showSearch"] = true;
-            _values["wallpaperType"] = "aura";
+            _values["wallpaperType"] = "toge";
             _values["wallpaperValue"] = "";
             _values["wallpaperDim"] = 0;
             _values["wallpaperBlur"] = 0;

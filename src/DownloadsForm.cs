@@ -7,7 +7,7 @@ using System.Windows.Forms;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// The downloads list, opened from the toolbar button, Ctrl+J or the Aura
+    /// The downloads list, opened from the toolbar button, Ctrl+J or the Toge
     /// menu. It is a normal window rather than a dialog, because downloads
     /// finish while the user is doing something else and the list has to keep
     /// up with them.
@@ -16,10 +16,11 @@ namespace SimpleBrowser
     {
         private readonly ListView _list;
         private readonly Label _count;
-        private readonly AuraButton _pause;
+        private readonly TogeButton _pause;
 
         public DownloadsForm()
         {
+            AppIcon.Apply(this);
             Text = "Downloads";
             AutoScaleMode = AutoScaleMode.None;
             Size = new Size(Dpi.Px(720), Dpi.Px(480));
@@ -55,7 +56,7 @@ namespace SimpleBrowser
             _count.AutoSize = true;
             _count.Location = new Point(Dpi.Px(126), Dpi.Px(24));
 
-            var clear = new AuraButton();
+            var clear = new TogeButton();
             clear.Text = "Clear Finished";
             clear.Size = new Size(Dpi.Px(126), Dpi.Px(32));
             clear.Radius = Dpi.Px(8);
@@ -68,7 +69,7 @@ namespace SimpleBrowser
                 DownloadsManager.Current.ClearFinished();
             };
 
-            var openFolder = new AuraButton();
+            var openFolder = new TogeButton();
             openFolder.Text = "Open Folder";
             openFolder.Size = new Size(Dpi.Px(112), Dpi.Px(32));
             openFolder.Radius = Dpi.Px(8);
@@ -168,9 +169,9 @@ namespace SimpleBrowser
             RefreshList();
         }
 
-        private AuraButton MakeButton(string text, int left)
+        private TogeButton MakeButton(string text, int left)
         {
-            var button = new AuraButton();
+            var button = new TogeButton();
             button.Text = text;
             button.Size = new Size(Dpi.Px(text.Length > 10 ? 116 : 88), Dpi.Px(32));
             button.Radius = Dpi.Px(8);

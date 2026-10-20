@@ -8,7 +8,7 @@ namespace SimpleBrowser
 {
     /// <summary>
     /// Read-only SQLite access through the SQLite copy that ships with Windows
-    /// (winsqlite3.dll). This is what lets Aura read another Chromium browser's
+    /// (winsqlite3.dll). This is what lets Toge read another Chromium browser's
     /// history and top sites without shipping a database engine of its own.
     ///
     /// The source file is copied to a scratch file first, because browser
@@ -61,7 +61,7 @@ namespace SimpleBrowser
 
             string scratch = Path.Combine(
                 Path.GetTempPath(),
-                "aura-read-" + Guid.NewGuid().ToString("N") + ".db");
+                "toge-read-" + Guid.NewGuid().ToString("N") + ".db");
 
             IntPtr db = IntPtr.Zero;
             IntPtr statement = IntPtr.Zero;

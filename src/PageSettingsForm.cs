@@ -8,8 +8,8 @@ namespace SimpleBrowser
     /// The page-settings popover that belongs to the AA button.
     ///
     /// It only ever describes the site on screen: the zoom that site is shown at
-    /// and a way into reader view. Nothing here changes Aura as a whole, which is
-    /// what separates it from the Aura menu behind the ⋯ button.
+    /// and a way into reader view. Nothing here changes Toge as a whole, which is
+    /// what separates it from the Toge menu behind the ⋯ button.
     /// </summary>
     public class PageSettingsForm : Form
     {
@@ -26,8 +26,8 @@ namespace SimpleBrowser
         private Label _zoomValue;
         private Label _hint;
         private Label _reset;
-        private AuraButton _smaller;
-        private AuraButton _larger;
+        private TogeButton _smaller;
+        private TogeButton _larger;
 
         /// <summary>The zoom the popover is showing, as a percentage.</summary>
         public int Zoom
@@ -105,7 +105,7 @@ namespace SimpleBrowser
             _larger = Stepper("+", Dpi.Px(228));
             _larger.Click += delegate { Step(1); };
 
-            var reader = new AuraButton();
+            var reader = new TogeButton();
             reader.Text = "Reader View";
             reader.Font = new Font("Segoe UI", 9.25F);
             reader.Radius = Dpi.Px(8);
@@ -158,9 +158,9 @@ namespace SimpleBrowser
         }
 
         /// <summary>A small square button for the zoom stepper.</summary>
-        private AuraButton Stepper(string text, int left)
+        private TogeButton Stepper(string text, int left)
         {
-            var button = new AuraButton();
+            var button = new TogeButton();
             button.Text = text;
             button.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
             button.Radius = Dpi.Px(7);

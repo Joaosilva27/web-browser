@@ -37,6 +37,7 @@ namespace SimpleBrowser
         public BookmarksForm(BookmarkManager bookmarks)
         {
             _bookmarks = bookmarks;
+            AppIcon.Apply(this);
 
             Text = "Bookmarks";
             AutoScaleMode = AutoScaleMode.None;
@@ -167,7 +168,7 @@ namespace SimpleBrowser
 
         private Button MakeButton(string text, int width, Color back, bool light)
         {
-            var button = new AuraButton();
+            var button = new TogeButton();
             button.Text = text;
             button.Size = new Size(width, Dpi.Px(32));
             button.Radius = Dpi.Px(8);

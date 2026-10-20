@@ -63,7 +63,7 @@ namespace SimpleBrowser
     }
 
     /// <summary>
-    /// Finds browsers that Aura can read data from. Chromium browsers expose
+    /// Finds browsers that Toge can read data from. Chromium browsers expose
     /// bookmarks as JSON and history as SQLite; Firefox exposes both as SQLite.
     /// </summary>
     public static class BrowserProfiles

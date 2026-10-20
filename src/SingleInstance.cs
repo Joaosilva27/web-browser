@@ -8,25 +8,25 @@ using System.Windows.Forms;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// Keeps Aura to one copy per user session.
+    /// Keeps Toge to one copy per user session.
     ///
     /// The first copy owns a named mutex and parks an invisible window under a
     /// known title. A second copy — started by clicking a link, or by the shell
-    /// when Aura is the default browser — finds that window, posts the request
+    /// when Toge is the default browser — finds that window, posts the request
     /// to it through WM_COPYDATA and exits, so the page opens in the window the
     /// user already has instead of starting a second browser on the same data.
     /// </summary>
     public static class SingleInstance
     {
-        private const string MutexName = "Local\\AuraBrowser.SingleInstance";
-        private const string WindowTitle = "AuraBrowser.HandOff.v1";
+        private const string MutexName = "Local\\Toge.SingleInstance";
+        private const string WindowTitle = "Toge.HandOff.v1";
         private const int WM_COPYDATA = 0x004A;
 
         private static Mutex _mutex;
         private static HandoffWindow _window;
 
         /// <summary>
-        /// Claims Aura for this process. When another copy already owns it, the
+        /// Claims Toge for this process. When another copy already owns it, the
         /// request is handed to that copy and false is returned, meaning this
         /// process should exit without doing anything else.
         /// </summary>
@@ -116,7 +116,7 @@ namespace SimpleBrowser
 
         /// <summary>
         /// A window that is never shown, exists only to receive the hand-off
-        /// from another copy of Aura.
+        /// from another copy of Toge.
         /// </summary>
         private class HandoffWindow : Form
         {

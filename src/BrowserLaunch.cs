@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// What Aura was asked to do when it was started: open a particular page,
+    /// What Toge was asked to do when it was started: open a particular page,
     /// open a private window, or just carry on from the last session. It is the
-    /// shape of a command line and also the shape handed to a running Aura when
+    /// shape of a command line and also the shape handed to a running Toge when
     /// the user clicks a link while the browser is already open.
     /// </summary>
     public class BrowserLaunch
@@ -39,7 +39,7 @@ namespace SimpleBrowser
                     continue;
                 }
 
-                // Anything else that starts with a dash is a switch Aura does
+                // Anything else that starts with a dash is a switch Toge does
                 // not know; ignore it rather than treating it as a page.
                 if (arg.StartsWith("-")) continue;
 

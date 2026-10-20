@@ -16,7 +16,7 @@ namespace SimpleBrowser
     }
 
     /// <summary>
-    /// The tiles on the start page. Seeded with Aura's own picks and extended by
+    /// The tiles on the start page. Seeded with Toge's own picks and extended by
     /// imported top sites, so the new tab page reflects where the user actually
     /// goes rather than a fixed list.
     /// </summary>
@@ -40,7 +40,7 @@ namespace SimpleBrowser
         public FavoritesStore()
         {
             string appData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
             if (!Directory.Exists(appData))
             {
                 Directory.CreateDirectory(appData);
@@ -297,7 +297,7 @@ namespace SimpleBrowser
         {
             if (TryLoad()) return;
 
-            // Aura's own starting set.
+            // Toge's own starting set.
             AddDefault("Brave Search", "https://search.brave.com", "B", "#f25a29", null);
             AddDefault("GitHub", "https://github.com", "G", "#24292f", null);
             AddDefault("YouTube", "https://youtube.com", "Y", "#ff0033", null);

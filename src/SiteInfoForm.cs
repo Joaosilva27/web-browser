@@ -72,7 +72,7 @@ namespace SimpleBrowser
             _cookieCount.AutoSize = true;
             _cookieCount.Location = new Point(Dpi.Px(18), Dpi.Px(108));
 
-            var clear = new AuraButton();
+            var clear = new TogeButton();
             clear.Text = "Clear cookies";
             clear.Font = new Font("Segoe UI", 9F);
             clear.Radius = Dpi.Px(8);
@@ -85,7 +85,7 @@ namespace SimpleBrowser
                 if (ClearCookiesRequested != null) ClearCookiesRequested(this, EventArgs.Empty);
             };
 
-            var settings = new AuraButton();
+            var settings = new TogeButton();
             settings.Text = "Site settings";
             settings.Font = new Font("Segoe UI", 9F);
             settings.Radius = Dpi.Px(8);

@@ -149,7 +149,7 @@ namespace SimpleBrowser
             hint.ForeColor = Theme.TextSecondary;
             hint.AutoSize = true;
 
-            var reload = new AuraButton();
+            var reload = new TogeButton();
             reload.Text = "Reload";
             reload.Size = new Size(Dpi.Px(112), Dpi.Px(34));
             reload.Radius = Dpi.Px(8);
@@ -223,7 +223,7 @@ namespace SimpleBrowser
                 // Lets the start page show a wallpaper the user picked off disk.
                 HomeWallpaper.ApplyMapping(_webView.CoreWebView2);
 
-                // Pages should follow Aura's light/dark choice, not the OS.
+                // Pages should follow Toge's light/dark choice, not the OS.
                 _webView.CoreWebView2.Profile.PreferredColorScheme = Theme.IsDark
                     ? CoreWebView2PreferredColorScheme.Dark
                     : CoreWebView2PreferredColorScheme.Light;
@@ -317,7 +317,7 @@ namespace SimpleBrowser
             try
             {
                 _webView.CoreWebView2.ExecuteScriptAsync(
-                    "window.AuraHome && window.AuraHome.apply(" + HomePage.StateJson() + ");");
+                    "window.TogeHome && window.TogeHome.apply(" + HomePage.StateJson() + ");");
             }
             catch
             {
@@ -336,7 +336,7 @@ namespace SimpleBrowser
             _openHomeCustomizerPending = true;
         }
 
-        /// <summary>Opens the start page's customize sheet, from the Aura menu.</summary>
+        /// <summary>Opens the start page's customize sheet, from the Toge menu.</summary>
         public void OpenHomeCustomizer()
         {
             if (!_isHome || !_isInitialized || _webView.CoreWebView2 == null) return;
@@ -344,7 +344,7 @@ namespace SimpleBrowser
             try
             {
                 _webView.CoreWebView2.ExecuteScriptAsync(
-                    "window.AuraHome && window.AuraHome.openCustomize();");
+                    "window.TogeHome && window.TogeHome.openCustomize();");
             }
             catch
             {
@@ -364,7 +364,7 @@ namespace SimpleBrowser
             try
             {
                 _webView.CoreWebView2.ExecuteScriptAsync(
-                    "window.AuraHome && window.AuraHome.toast(" + literal + ");");
+                    "window.TogeHome && window.TogeHome.toast(" + literal + ");");
             }
             catch
             {
@@ -372,7 +372,7 @@ namespace SimpleBrowser
             }
         }
 
-        /// <summary>Shows Aura's own settings page in this tab.</summary>
+        /// <summary>Shows Toge's own settings page in this tab.</summary>
         public void LoadSettingsPage()
         {
             _isHome = false;
@@ -464,7 +464,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Shows or hides Aura's own find bar on the page. Finding is left to
+        /// Shows or hides Toge's own find bar on the page. Finding is left to
         /// the script, which owns the bar and its match counts.
         /// </summary>
         public void ToggleFind()
@@ -714,7 +714,7 @@ namespace SimpleBrowser
                 if (AdBlocker.ShouldBlock(uri, _topLevelUri, MapResourceType(args.ResourceContext)))
                 {
                     args.Response = _webView.CoreWebView2.Environment.CreateWebResourceResponse(
-                        null, 403, "Blocked by Aura Shields", "");
+                        null, 403, "Blocked by Toge Shields", "");
                 }
             }
             catch
@@ -901,7 +901,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// A page (usually a video) asked for its own fullscreen. Aura answers by
+        /// A page (usually a video) asked for its own fullscreen. Toge answers by
         /// filling the working area instead of the whole monitor, so the taskbar
         /// stays where it is.
         /// </summary>
@@ -971,9 +971,9 @@ namespace SimpleBrowser
 
         /// <summary>
         /// The settings page and the start page talk to the app through this
-        /// channel. Only Aura's own pages may use it: the tab has to be showing
+        /// channel. Only Toge's own pages may use it: the tab has to be showing
         /// about:settings or about:home, and the message has to come from a
-        /// document Aura itself wrote, so a website loaded in this tab can never
+        /// document Toge itself wrote, so a website loaded in this tab can never
         /// change a setting or a shortcut.
         /// </summary>
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -1004,7 +1004,7 @@ namespace SimpleBrowser
             if (handler != null) handler(this, e.WebMessageAsJson);
         }
 
-        private const string ScrollPrefix = "aura-scroll:";
+        private const string ScrollPrefix = "toge-scroll:";
 
         /// <summary>
         /// Reports where the page is scrolled, so a tab can be put back where it
@@ -1013,8 +1013,8 @@ namespace SimpleBrowser
         /// </summary>
         private const string ScrollScript = @"(function () {
     if (window.top !== window) { return; }
-    if (window.__auraScrollTrack) { return; }
-    window.__auraScrollTrack = true;
+    if (window.__togeScrollTrack) { return; }
+    window.__togeScrollTrack = true;
 
     var queued = false;
 

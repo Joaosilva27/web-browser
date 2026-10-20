@@ -30,13 +30,13 @@ namespace SimpleBrowser
         /// <summary>Script the host runs to refresh the live numbers.</summary>
         public static string StatsScript(int rules, int blocked)
         {
-            return "auraStats(" + rules + "," + blocked + ");";
+            return "togeStats(" + rules + "," + blocked + ");";
         }
 
         /// <summary>Script the host runs to report the result of a data action.</summary>
         public static string NoticeScript(string message)
         {
-            return "auraNotice(" + Json.Write(message ?? string.Empty) + ");";
+            return "togeNotice(" + Json.Write(message ?? string.Empty) + ");";
         }
 
         private static Dictionary<string, object> BuildState()
@@ -436,7 +436,7 @@ namespace SimpleBrowser
             <div class='row'>
                 <div class='label'>
                     <div class='name'>Block ads and trackers</div>
-                    <div class='hint'>Aura cancels matching requests before they leave the browser.</div>
+                    <div class='hint'>Toge cancels matching requests before they leave the browser.</div>
                 </div>
                 <label class='switch'>
                     <input type='checkbox' data-key='shields' />
@@ -464,7 +464,7 @@ namespace SimpleBrowser
             <div class='row'>
                 <div class='label'>
                     <div class='name'>Offer to save passwords</div>
-                    <div class='hint'>Saved logins stay in Aura's own profile on this PC.</div>
+                    <div class='hint'>Saved logins stay in Toge's own profile on this PC.</div>
                 </div>
                 <label class='switch'>
                     <input type='checkbox' data-key='savePasswords' />
@@ -488,7 +488,7 @@ namespace SimpleBrowser
             <div class='row'>
                 <div class='label'>
                     <div class='name'>On startup</div>
-                    <div class='hint'>Aura can reopen the tabs from last time, and always offers them back after a crash.</div>
+                    <div class='hint'>Toge can reopen the tabs from last time, and always offers them back after a crash.</div>
                 </div>
                 <div class='seg' id='startup'>
                     <button data-value='home'>Start page</button>
@@ -538,7 +538,7 @@ namespace SimpleBrowser
             <div class='row'>
                 <div class='label'>
                     <div class='name'>Sites you have answered for</div>
-                    <div class='hint'>Aura asks before a site uses your camera, microphone, location and so on. Change an answer here, or put it back to asking.</div>
+                    <div class='hint'>Toge asks before a site uses your camera, microphone, location and so on. Change an answer here, or put it back to asking.</div>
                 </div>
                 <button class='act' data-perm-clear='1'>Remove All</button>
             </div>
@@ -590,7 +590,7 @@ namespace SimpleBrowser
         <h2 id='about'>About</h2>
         <div class='card'>
             <div class='row'>
-                <div class='label'><div class='name'>Aura</div></div>
+                <div class='label'><div class='name'>Toge</div></div>
                 <div class='value'>Version 2.0</div>
             </div>
             <div class='row'>
@@ -632,15 +632,15 @@ namespace SimpleBrowser
         flash.timer = setTimeout(function () { saved.classList.remove('show'); }, 1100);
     }
 
-    function auraNotice(text) {
+    function togeNotice(text) {
         var notice = document.getElementById('notice');
         notice.textContent = text;
         notice.classList.add('show');
-        clearTimeout(auraNotice.timer);
-        auraNotice.timer = setTimeout(function () { notice.classList.remove('show'); }, 5000);
+        clearTimeout(togeNotice.timer);
+        togeNotice.timer = setTimeout(function () { notice.classList.remove('show'); }, 5000);
     }
 
-    function auraStats(rules, blocked) {
+    function togeStats(rules, blocked) {
         document.getElementById('rule-count').textContent = rules.toLocaleString();
         document.getElementById('blocked-count').textContent = blocked.toLocaleString();
     }
@@ -689,18 +689,18 @@ namespace SimpleBrowser
     }
 
     if (S.isDefault) {
-        document.getElementById('default-hint').textContent = 'Aura is your default browser.';
+        document.getElementById('default-hint').textContent = 'Toge is your default browser.';
         var defaultBtn = document.getElementById('default-btn');
         defaultBtn.textContent = 'Default';
         defaultBtn.classList.remove('primary');
         defaultBtn.disabled = true;
     } else {
         document.getElementById('default-hint').textContent =
-            'Opens links from other apps in Aura. Windows asks you to confirm.';
+            'Opens links from other apps in Toge. Windows asks you to confirm.';
     }
 
     // ── The list of site permissions ───────────────────────────────────────
-    function auraPermissions(rows) {
+    function togePermissions(rows) {
         var list = document.getElementById('perm-list');
         var empty = document.getElementById('perm-empty');
         list.innerHTML = '';

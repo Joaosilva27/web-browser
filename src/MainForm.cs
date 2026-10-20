@@ -86,7 +86,7 @@ namespace SimpleBrowser
         private readonly ShortcutFilter _shortcuts;
         private bool _chromeReady;
 
-        /// <summary>Every window Aura has open, so a new one can be counted and
+        /// <summary>Every window Toge has open, so a new one can be counted and
         /// all of them can be persisted together.</summary>
         internal static readonly List<MainForm> Windows = new List<MainForm>();
 
@@ -110,6 +110,8 @@ namespace SimpleBrowser
             _privateMode = privateMode;
             _startupTabs = startupTabs;
             _startupActive = activeTab;
+
+            AppIcon.Apply(this);
 
             Theme.LoadPreference();
             Settings.Current.ApplyThemePreference();
@@ -173,7 +175,7 @@ namespace SimpleBrowser
 
         private void InitializeWindow()
         {
-            Text = _privateMode ? "Aura \u2014 Private" : "Aura";
+            Text = _privateMode ? "Toge \u2014 Private" : "Toge";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             // The process is DPI-aware, so all sizes below are physical pixels.
@@ -335,7 +337,7 @@ namespace SimpleBrowser
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error initializing Aura chrome: " + ex.Message, "Aura Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Error initializing Toge chrome: " + ex.Message, "Toge Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -705,7 +707,7 @@ namespace SimpleBrowser
 
         private void OnTabNotificationArrived(BrowserTab tab, CoreWebView2NotificationReceivedEventArgs e)
         {
-            // Aura draws the toast, so the engine must not draw one as well.
+            // Toge draws the toast, so the engine must not draw one as well.
             e.Handled = true;
 
             var note = e.Notification;
@@ -745,7 +747,7 @@ namespace SimpleBrowser
 
         /// <summary>
         /// A site behind a login asked for a name and password. The dialog is
-        /// Aura's own, and nothing it collects is written anywhere.
+        /// Toge's own, and nothing it collects is written anywhere.
         /// </summary>
         private void OnTabAuthenticationRequested(BrowserTab tab, CoreWebView2BasicAuthenticationRequestedEventArgs e)
         {
@@ -1725,7 +1727,7 @@ namespace SimpleBrowser
 
         /// <summary>
         /// The card behind the lock: who the page is, how the connection stands,
-        /// and the one piece of site data Aura can clear without wiping the
+        /// and the one piece of site data Toge can clear without wiping the
         /// whole profile.
         /// </summary>
         private void ShowSiteInfo(int cssX, int cssY)
@@ -2023,7 +2025,7 @@ namespace SimpleBrowser
                 return;
             }
 
-            // Everything else is drawn by Aura, so the default menu stays away.
+            // Everything else is drawn by Toge, so the default menu stays away.
             e.Handled = true;
 
             var menu = NewMenu();
@@ -2110,7 +2112,7 @@ namespace SimpleBrowser
 
         // ── Site permissions ─────────────────────────────────────────────────
 
-        /// <summary>The words Aura uses for each permission a page can ask for.</summary>
+        /// <summary>The words Toge uses for each permission a page can ask for.</summary>
         public static string PermissionName(CoreWebView2PermissionKind kind)
         {
             switch (kind)
@@ -2153,7 +2155,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Asks the user, in Aura's own words, before a page uses the camera,
+        /// Asks the user, in Toge's own words, before a page uses the camera,
         /// the microphone, their location and so on, and remembers the answer
         /// for that site the way a browser normally does.
         /// </summary>
@@ -2237,7 +2239,7 @@ namespace SimpleBrowser
             var profile = ProfileForData();
             if (profile == null)
             {
-                tab.RunScript("auraPermissions([]);");
+                tab.RunScript("togePermissions([]);");
                 return;
             }
 
@@ -2276,12 +2278,12 @@ namespace SimpleBrowser
                 }
 
                 string json = Json.Write(rows);
-                tab.RunScript("auraPermissions(" + (json == null ? "[]" : json) + ");");
+                tab.RunScript("togePermissions(" + (json == null ? "[]" : json) + ");");
             }
             catch
             {
                 // A profile that is shutting down has nothing to report.
-                tab.RunScript("auraPermissions([]);");
+                tab.RunScript("togePermissions([]);");
             }
         }
 
@@ -2624,7 +2626,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Opens another Aura window. A private one is given its own in-private
+        /// Opens another Toge window. A private one is given its own in-private
         /// profile, so nothing it does is written to the normal profile on disk.
         /// </summary>
         internal static MainForm NewWindow(bool privateMode)
@@ -2698,11 +2700,11 @@ namespace SimpleBrowser
         private void ShowAbout()
         {
             MessageBox.Show(
-                "Aura\n\n" +
+                "Toge\n\n" +
                 "A lightweight browser with a Safari-inspired interface and Brave-grade Shields.\n\n" +
                 "Chromium engine powered by Microsoft Edge WebView2.\n" +
                 "Version 2.0",
-                "About Aura",
+                "About Toge",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
@@ -2811,7 +2813,7 @@ namespace SimpleBrowser
         /// <summary>
         /// Browser keys pressed in the page on show. Answering one marks it
         /// handled, which is what stops Chromium drawing its own find bar or
-        /// reloading behind Aura's back; everything Aura does not claim keeps
+        /// reloading behind Toge's back; everything Toge does not claim keeps
         /// working the way the engine normally does it.
         /// </summary>
         private void OnTabAcceleratorPressed(BrowserTab tab, int vk, CoreWebView2AcceleratorKeyPressedEventArgs e)
@@ -2856,7 +2858,7 @@ namespace SimpleBrowser
 
         /// <summary>
         /// Ctrl+plus and Ctrl+minus walk the same steps as the AA popover, and
-        /// belong to the site on screen rather than to Aura as a whole.
+        /// belong to the site on screen rather than to Toge as a whole.
         /// </summary>
         private void StepSiteZoom(int direction)
         {
@@ -2963,7 +2965,7 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Runs a download Aura's way: the file lands in the Downloads folder
+        /// Runs a download Toge's way: the file lands in the Downloads folder
         /// (or wherever the user asks), the list keeps up with it, and WebView2's
         /// own download bar never appears inside the page.
         /// </summary>
@@ -3182,7 +3184,7 @@ namespace SimpleBrowser
         // ── Settings page ─────────────────────────────────────────────────────
 
         /// <summary>
-        /// Opens Aura's settings page, reusing the tab that already holds it so
+        /// Opens Toge's settings page, reusing the tab that already holds it so
         /// Ctrl+, twice does not leave two copies behind.
         /// </summary>
         public void OpenSettings()
@@ -3203,7 +3205,7 @@ namespace SimpleBrowser
         /// <summary>
         /// Handles one message from the settings page. The page only reports a
         /// key and a value; deciding what that means stays here, and only keys
-        /// Aura knows about are accepted.
+        /// Toge knows about are accepted.
         /// </summary>
         private void OnTabSettingsMessage(BrowserTab tab, string json)
         {
@@ -3332,7 +3334,7 @@ namespace SimpleBrowser
 
         /// <summary>
         /// Asks for a picture and makes it the start page wallpaper. The file is
-        /// copied into Aura's own wallpapers folder first, so the page keeps
+        /// copied into Toge's own wallpapers folder first, so the page keeps
         /// working after the original is moved or deleted.
         /// </summary>
         private void ChooseHomeWallpaper()
@@ -3350,7 +3352,7 @@ namespace SimpleBrowser
                 if (string.IsNullOrEmpty(name))
                 {
                     MessageBox.Show("That picture could not be used as a wallpaper.",
-                        "Aura", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        "Toge", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -3372,7 +3374,7 @@ namespace SimpleBrowser
         {
             string previous = Settings.Current.WallpaperValue;
 
-            Settings.Current.Set("wallpaperType", "aura");
+            Settings.Current.Set("wallpaperType", "toge");
             Settings.Current.Set("wallpaperValue", "");
             Settings.Current.Set("wallpaperDim", 0);
             Settings.Current.Set("wallpaperBlur", 0);
@@ -3414,9 +3416,9 @@ namespace SimpleBrowser
         }
 
         /// <summary>
-        /// Registers Aura with Windows and opens the page where the user makes
+        /// Registers Toge with Windows and opens the page where the user makes
         /// the choice. Windows will not let an app take the job silently, so the
-        /// best Aura can do is put itself on the list and say so.
+        /// best Toge can do is put itself on the list and say so.
         /// </summary>
         private void SetAsDefaultBrowser()
         {
@@ -3426,7 +3428,7 @@ namespace SimpleBrowser
             if (!registered)
             {
                 MessageBox.Show(this,
-                    "Aura could not register itself with Windows.\n\n" +
+                    "Toge could not register itself with Windows.\n\n" +
                     "You can still choose a browser from the Windows Settings page that just opened.",
                     "Default browser",
                     MessageBoxButtons.OK,
@@ -3656,7 +3658,7 @@ namespace SimpleBrowser
             menu.ShowImageMargin = false;
             menu.ShowCheckMargin = false;
             menu.Padding = new Padding(5, 6, 5, 6);
-            menu.Renderer = new ToolStripProfessionalRenderer(new AuraMenuColors());
+            menu.Renderer = new ToolStripProfessionalRenderer(new TogeMenuColors());
 
             var newTabItem = new ToolStripMenuItem("New Tab", null, delegate { AddNewTab(); });
             newTabItem.ShortcutKeyDisplayString = "Ctrl+T";
@@ -3706,7 +3708,7 @@ namespace SimpleBrowser
             var sourceItem = new ToolStripMenuItem("View Page Source", null, delegate { ShowPageSource(); });
             sourceItem.ShortcutKeyDisplayString = "Ctrl+U";
 
-            var shieldItem = new ToolStripMenuItem("Aura Shields", null, delegate { ShowBraveShields(); });
+            var shieldItem = new ToolStripMenuItem("Toge Shields", null, delegate { ShowBraveShields(); });
 
             var appearanceItem = new ToolStripMenuItem("Appearance");
             var lightItem = new ToolStripMenuItem("Light", null, delegate { Settings.Current.Set("theme", "light"); });
@@ -3737,11 +3739,11 @@ namespace SimpleBrowser
                 reopenItem.Enabled = _closedTabs.Count > 0;
             };
 
-            var aboutItem = new ToolStripMenuItem("About Aura", null, delegate { ShowAbout(); });
+            var aboutItem = new ToolStripMenuItem("About Toge", null, delegate { ShowAbout(); });
             var settingsItem = new ToolStripMenuItem("Settings\u2026", null, delegate { OpenSettings(); });
             settingsItem.ShortcutKeyDisplayString = "Ctrl+,";
             var importItem = new ToolStripMenuItem("Import Browser Data\u2026", null, delegate { ShowImport(); });
-            var quitItem = new ToolStripMenuItem("Quit Aura", null, delegate { Close(); });
+            var quitItem = new ToolStripMenuItem("Quit Toge", null, delegate { Close(); });
 
             menu.Items.Add(newTabItem);
             menu.Items.Add(newWindowItem);
@@ -4037,7 +4039,7 @@ namespace SimpleBrowser
         }
     }
 
-    internal class AuraMenuColors : ProfessionalColorTable
+    internal class TogeMenuColors : ProfessionalColorTable
     {
         public override Color ToolStripDropDownBackground { get { return Theme.CardBackground; } }
         public override Color ImageMarginGradientBegin { get { return Theme.CardBackground; } }

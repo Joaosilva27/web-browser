@@ -6,7 +6,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace SimpleBrowser
 {
-    /// <summary>One of Aura's built-in wallpaper gradients.</summary>
+    /// <summary>One of Toge's built-in wallpaper gradients.</summary>
     public class WallpaperPreset
     {
         public string Id;
@@ -20,7 +20,7 @@ namespace SimpleBrowser
     /// <summary>
     /// Wallpapers for the start page.
     ///
-    /// Pictures are copied into %APPDATA%\AuraBrowser\wallpapers and served back
+    /// Pictures are copied into %APPDATA%\Toge\wallpapers and served back
     /// to the page through a WebView2 virtual host, so the start page can just
     /// point a CSS background at them. That keeps multi-megabyte base64 out of
     /// the generated HTML, which is what stuffing a photo into a data: URL would
@@ -29,7 +29,7 @@ namespace SimpleBrowser
     public static class HomeWallpaper
     {
         /// <summary>The host name the wallpapers folder is published under.</summary>
-        public const string VirtualHost = "aura.wall";
+        public const string VirtualHost = "toge.wall";
 
         public static readonly WallpaperPreset[] Gradients = new WallpaperPreset[]
         {
@@ -58,7 +58,7 @@ namespace SimpleBrowser
             get
             {
                 string appData = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraBrowser");
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Toge");
                 string folder = Path.Combine(appData, "wallpapers");
 
                 try
@@ -200,7 +200,7 @@ namespace SimpleBrowser
             }
             if (type == "color") return IsHexColor(value) ? value.ToUpperInvariant() : "Colour";
             if (type == "image") return IsLocalName(value) ? "Picture" : "Web picture";
-            return "Aura";
+            return "Toge";
         }
 
         /// <summary>

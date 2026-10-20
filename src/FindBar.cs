@@ -3,7 +3,7 @@ using System;
 namespace SimpleBrowser
 {
     /// <summary>
-    /// Find on page, as Aura's own bar rather than Chromium's.
+    /// Find on page, as Toge's own bar rather than Chromium's.
     ///
     /// The bar lives in a shadow root pinned to the top-right of the page, so
     /// the page's styles cannot reach it and it cannot leak styles back.
@@ -20,10 +20,10 @@ namespace SimpleBrowser
         }
 
         private const string Js = @"(function () {
-    if (window.AuraFind && window.AuraFind.host) { window.AuraFind.close(); return 'closed'; }
+    if (window.TogeFind && window.TogeFind.host) { window.TogeFind.close(); return 'closed'; }
 
     var host = document.createElement('div');
-    host.setAttribute('data-aura-find', '1');
+    host.setAttribute('data-toge-find', '1');
     host.style.cssText = 'all: initial; position: fixed; top: 12px; right: 16px; z-index: 2147483646;';
 
     var shadow = host.attachShadow({ mode: 'open' });
@@ -139,21 +139,21 @@ namespace SimpleBrowser
     // Matching is shown with the browser's own highlight registry rather than
     // by taking the document selection. Taking the selection would move the
     // caret out of this bar, and the second letter typed would land in the page.
-    var HIGHLIGHTS = 'aura-find';
-    var CURRENT = 'aura-find-current';
+    var HIGHLIGHTS = 'toge-find';
+    var CURRENT = 'toge-find-current';
 
     function highlightSupported() {
         return !!(window.CSS && CSS.highlights && typeof Highlight === 'function');
     }
 
     function ensureHighlightStyle() {
-        if (document.getElementById('aura-find-style')) { return; }
+        if (document.getElementById('toge-find-style')) { return; }
 
         var sheet = document.createElement('style');
-        sheet.id = 'aura-find-style';
+        sheet.id = 'toge-find-style';
         sheet.textContent =
-            '::highlight(aura-find) { background-color: rgba(255, 214, 0, .32); }' +
-            '::highlight(aura-find-current) { background-color: #ffb100; color: #14161a; }';
+            '::highlight(toge-find) { background-color: rgba(255, 214, 0, .32); }' +
+            '::highlight(toge-find-current) { background-color: #ffb100; color: #14161a; }';
 
         (document.head || document.documentElement).appendChild(sheet);
     }
@@ -235,7 +235,7 @@ namespace SimpleBrowser
     function close() {
         clearMatches();
         if (host.parentNode) { host.parentNode.removeChild(host); }
-        if (window.AuraFind) { window.AuraFind.host = null; }
+        if (window.TogeFind) { window.TogeFind.host = null; }
     }
 
     input.addEventListener('input', function () { search(input.value); });
@@ -271,7 +271,7 @@ namespace SimpleBrowser
     if (seed.length > 0 && seed.length <= 120 && seed.indexOf('\n') < 0) { input.value = seed; }
 
     document.documentElement.appendChild(host);
-    window.AuraFind = { host: host, close: close, input: input };
+    window.TogeFind = { host: host, close: close, input: input };
 
     input.focus();
     input.select();

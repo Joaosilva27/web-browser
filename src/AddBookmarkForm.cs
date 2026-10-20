@@ -87,7 +87,7 @@ namespace SimpleBrowser
             _folderBox.Font = new Font("Segoe UI", 9.5F);
             _folderBox.FlatStyle = FlatStyle.System;
 
-            var newFolderButton = new AuraButton();
+            var newFolderButton = new TogeButton();
             newFolderButton.Text = "New Folder";
             newFolderButton.Size = new Size(Dpi.Px(120), Dpi.Px(30));
             newFolderButton.Radius = Dpi.Px(8);
@@ -96,7 +96,7 @@ namespace SimpleBrowser
             newFolderButton.Location = new Point(ClientSize.Width - Dpi.Px(134), Dpi.Px(119));
             newFolderButton.Click += delegate { CreateFolder(); };
 
-            var cancel = new AuraButton();
+            var cancel = new TogeButton();
             cancel.Text = "Cancel";
             cancel.Size = new Size(Dpi.Px(92), Dpi.Px(32));
             cancel.Radius = Dpi.Px(8);
@@ -109,7 +109,7 @@ namespace SimpleBrowser
                 Close();
             };
 
-            var save = new AuraButton();
+            var save = new TogeButton();
             save.Text = "Save";
             save.Size = new Size(Dpi.Px(104), Dpi.Px(32));
             save.Radius = Dpi.Px(8);

@@ -33,7 +33,7 @@ namespace SimpleBrowser
     /// Cookies and saved passwords are deliberately out of scope: Chrome, Edge
     /// and Brave have encrypted them with App-Bound Encryption since version 127,
     /// and the key only unwraps for the browser that wrote it. Nothing another
-    /// application does can read those values, so Aura does not pretend to.
+    /// application does can read those values, so Toge does not pretend to.
     /// </summary>
     public static class BrowserImporter
     {
