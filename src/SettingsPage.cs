@@ -82,7 +82,7 @@ namespace SimpleBrowser
         {
             string[] codes = new string[]
             {
-                "pt", "en", "es", "fr", "de", "it", "nl", "pl", "ru", "uk",
+                "en", "pt", "es", "fr", "de", "it", "nl", "pl", "ru", "uk",
                 "ja", "ko", "zh", "ar", "tr", "sv", "fi", "cs", "el", "ro",
                 "id", "vi", "th", "hi"
             };

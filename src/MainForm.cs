@@ -2276,7 +2276,10 @@ namespace SimpleBrowser
         {
             if (tab == null || tab.IsDisposed || !tab.CanTranslate) return;
             if (string.IsNullOrEmpty(code)) return;
-            if (string.Equals(code, "en", StringComparison.OrdinalIgnoreCase)) return;
+
+            // A page already in the language Translate would produce needs no
+            // help, so English pages stay quiet while the target is English.
+            if (SameLanguage(code, Settings.Current.TranslateLanguage)) return;
             if (tab.TranslatePrompted) return;
 
             bool always = Settings.Current.TranslateAlways;
@@ -2293,6 +2296,26 @@ namespace SimpleBrowser
             }
 
             tab.ShowTranslatePrompt(code);
+        }
+
+        /// <summary>
+        /// Compares language tags by their primary subtag, so "en-GB" and "en"
+        /// count as the same language and a page is never offered a pointless
+        /// translation into what it already speaks.
+        /// </summary>
+        private static bool SameLanguage(string first, string second)
+        {
+            return string.Equals(PrimaryLanguage(first), PrimaryLanguage(second),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string PrimaryLanguage(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return string.Empty;
+
+            int cut = code.IndexOf('-');
+            if (cut < 0) cut = code.IndexOf('_');
+            return cut > 0 ? code.Substring(0, cut) : code;
         }
 
         /// <summary>Answers a button in the translate bubble.</summary>

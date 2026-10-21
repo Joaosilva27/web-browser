@@ -211,10 +211,10 @@ namespace SimpleBrowser
             get { return Json.GetBool(_values, "showSearch", true); }
         }
 
-        /// <summary>The language Translate turns pages into ("pt", "en", ...).</summary>
+        /// <summary>The language Translate turns pages into ("en", "pt", ...).</summary>
         public string TranslateLanguage
         {
-            get { return Json.GetString(_values, "translateLang") ?? "pt"; }
+            get { return Json.GetString(_values, "translateLang") ?? "en"; }
         }
 
         /// <summary>False once the user has said "Never ask again".</summary>
@@ -550,6 +550,7 @@ namespace SimpleBrowser
             _values["zoom"] = 100;
             _values["startup"] = "home";
             _values["askDownloadPath"] = false;
+            _values["translateLang"] = "en";
         }
 
         private void Load()
@@ -566,6 +567,15 @@ namespace SimpleBrowser
                         foreach (var pair in stored)
                         {
                             _values[pair.Key] = pair.Value;
+                        }
+
+                        // Translate's first build asked for Portuguese by
+                        // accident. A file from that build moves to English
+                        // once, since "non-English" always meant English.
+                        if (Json.GetInt(stored, "version", 1) < 2)
+                        {
+                            _values["translateLang"] = "en";
+                            Save();
                         }
                     }
                 }
@@ -589,7 +599,7 @@ namespace SimpleBrowser
             try
             {
                 var output = new Dictionary<string, object>(_values, StringComparer.OrdinalIgnoreCase);
-                output["version"] = 1;
+                output["version"] = 2;
 
                 string json = Json.Write(output);
                 if (json != null) File.WriteAllText(_filePath, json);
