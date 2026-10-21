@@ -9,6 +9,10 @@ namespace SimpleBrowser
     public class WindowSession
     {
         public readonly List<string> Tabs = new List<string>();
+
+        /// <summary>One flag per tab, true where the tab was pinned.</summary>
+        public readonly List<bool> Pinned = new List<bool>();
+
         public int Active;
 
         public WindowSession()
@@ -98,8 +102,21 @@ namespace SimpleBrowser
                                     {
                                         foreach (object tab in tabs)
                                         {
+                                            // Newer files store a page and whether it was
+                                            // pinned; older ones just stored the address.
                                             string url = tab as string;
-                                            if (!string.IsNullOrEmpty(url)) session.Tabs.Add(url);
+                                            bool pinned = false;
+
+                                            var entryMap = tab as Dictionary<string, object>;
+                                            if (entryMap != null)
+                                            {
+                                                url = Json.GetString(entryMap, "url");
+                                                pinned = Json.GetBool(entryMap, "pinned", false);
+                                            }
+
+                                            if (string.IsNullOrEmpty(url)) continue;
+                                            session.Tabs.Add(url);
+                                            session.Pinned.Add(pinned);
                                         }
                                     }
                                 }
@@ -227,7 +244,11 @@ namespace SimpleBrowser
             foreach (var window in windows)
             {
                 var tabs = new List<object>();
-                foreach (string url in window.Tabs) tabs.Add(url);
+                for (int i = 0; i < window.Tabs.Count; i++)
+                {
+                    bool pinned = i < window.Pinned.Count && window.Pinned[i];
+                    tabs.Add(Json.Obj("url", window.Tabs[i], "pinned", pinned));
+                }
 
                 list.Add(Json.Obj("tabs", tabs, "active", window.Active));
             }

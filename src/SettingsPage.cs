@@ -24,6 +24,7 @@ namespace SimpleBrowser
             return Html
                 .Replace("__THEME__", Theme.IsDark ? "dark" : "light")
                 .Replace("__ENGINES__", RenderEngines())
+                .Replace("__LANGUAGES__", RenderLanguages())
                 .Replace("__STATE__", state);
         }
 
@@ -54,6 +55,9 @@ namespace SimpleBrowser
                 "zoom", Settings.Current.Zoom,
                 "startup", Settings.Current.StartupMode,
                 "askDownloadPath", Settings.Current.AskDownloadPath,
+                "translateAsk", Settings.Current.TranslateAsk,
+                "translateAlways", Settings.Current.TranslateAlways,
+                "translateLang", Settings.Current.TranslateLanguage,
                 "isDefault", DefaultBrowser.IsDefault(),
                 "ruleCount", AdBlocker.RuleCount,
                 "blockedCount", AdBlocker.BlockedCount,
@@ -71,6 +75,24 @@ namespace SimpleBrowser
             }
 
             builder.Append("<option value='custom'>Custom\u2026</option>");
+            return builder.ToString();
+        }
+
+        private static string RenderLanguages()
+        {
+            string[] codes = new string[]
+            {
+                "pt", "en", "es", "fr", "de", "it", "nl", "pl", "ru", "uk",
+                "ja", "ko", "zh", "ar", "tr", "sv", "fi", "cs", "el", "ro",
+                "id", "vi", "th", "hi"
+            };
+
+            var builder = new StringBuilder();
+            foreach (var code in codes)
+            {
+                builder.Append("<option value='").Append(code).Append("'>")
+                       .Append(Translator.LanguageName(code)).Append("</option>");
+            }
             return builder.ToString();
         }
 
@@ -356,6 +378,7 @@ namespace SimpleBrowser
         <a href='#search'>Search</a>
         <a href='#shields'>Shields</a>
         <a href='#passwords'>Passwords</a>
+        <a href='#languages'>Languages</a>
         <a href='#start'>Start page</a>
         <a href='#browsing'>Browsing</a>
         <a href='#permissions'>Site permissions</a>
@@ -480,6 +503,37 @@ namespace SimpleBrowser
                     <input type='checkbox' data-key='autofill' />
                     <span class='track'></span>
                 </label>
+            </div>
+        </div>
+
+        <h2 id='languages'>Languages</h2>
+        <div class='card'>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Ask before translating</div>
+                    <div class='hint'>A page in another language offers a translate bubble when it loads.</div>
+                </div>
+                <label class='switch'>
+                    <input type='checkbox' data-key='translateAsk' />
+                    <span class='track'></span>
+                </label>
+            </div>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Always translate non-English pages</div>
+                    <div class='hint'>Pages in any other language are translated without asking first.</div>
+                </div>
+                <label class='switch'>
+                    <input type='checkbox' data-key='translateAlways' />
+                    <span class='track'></span>
+                </label>
+            </div>
+            <div class='row'>
+                <div class='label'>
+                    <div class='name'>Translate pages into</div>
+                    <div class='hint'>Used by the page bubble and by Translate Page in the right-click menu.</div>
+                </div>
+                <select data-key='translateLang'>__LANGUAGES__</select>
             </div>
         </div>
 
@@ -662,6 +716,9 @@ namespace SimpleBrowser
     var select = document.querySelector('select[data-key=""search""]');
     select.value = S.search;
 
+    var langSelect = document.querySelector('select[data-key=""translateLang""]');
+    if (langSelect) { langSelect.value = S.translateLang; }
+
     var zoom = document.querySelector('input[type=range][data-key=""zoom""]');
     zoom.value = S.zoom;
     document.getElementById('zoom-value').textContent = S.zoom + '%';
@@ -799,6 +856,13 @@ namespace SimpleBrowser
         document.getElementById('engine-name').textContent = engineNameFrom(this.value);
         flash();
     });
+
+    if (langSelect) {
+        langSelect.addEventListener('change', function () {
+            post({ action: 'set', key: 'translatelang', value: this.value });
+            flash();
+        });
+    }
 
     if (customSearch) {
         customSearch.addEventListener('change', function () {

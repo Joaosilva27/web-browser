@@ -553,7 +553,41 @@ namespace SimpleBrowser
                 }
             }
 
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Export Bookmarks\u2026", null, delegate { ExportBookmarks(); }));
+
             menu.Show(_tree, new Point(e.X, e.Y));
+        }
+
+        /// <summary>
+        /// Saves every folder and bookmark as the HTML file other browsers
+        /// import, so a collection can leave Toge in one piece.
+        /// </summary>
+        private void ExportBookmarks()
+        {
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = "Export Bookmarks";
+                dialog.Filter = "Bookmarks HTML (*.html)|*.html|All files (*.*)|*.*";
+                dialog.FileName = "bookmarks.html";
+                dialog.AddExtension = true;
+
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                try
+                {
+                    _bookmarks.ExportNetscape(dialog.FileName);
+                    MessageBox.Show(this,
+                        "Bookmarks exported to\n" + dialog.FileName,
+                        "Export Bookmarks", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception error)
+                {
+                    MessageBox.Show(this,
+                        "The bookmarks could not be saved.\n\n" + error.Message,
+                        "Export Bookmarks", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
         }
 
         private void ListContextMenu(MouseEventArgs e)
@@ -586,6 +620,8 @@ namespace SimpleBrowser
             menu.Items.Add(moveTo);
 
             menu.Items.Add(new ToolStripMenuItem("Rename\u2026", null, delegate { RenameFocused(); }));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Export Bookmarks\u2026", null, delegate { ExportBookmarks(); }));
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Delete", null, delegate
             {

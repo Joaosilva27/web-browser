@@ -106,11 +106,12 @@ namespace SimpleBrowser
         private bool _menuDismissedByButton;
         private DateTime _menuDismissedAtUtc = DateTime.MinValue;
 
-        public MainForm(bool privateMode = false, List<string> startupTabs = null, int activeTab = 0)
+        public MainForm(bool privateMode = false, List<string> startupTabs = null, int activeTab = 0, List<bool> startupPinned = null)
         {
             _privateMode = privateMode;
             _startupTabs = startupTabs;
             _startupActive = activeTab;
+            _startupPinned = startupPinned;
 
             AppIcon.Apply(this);
 
@@ -140,6 +141,14 @@ namespace SimpleBrowser
             InitializeWindow();
             InitializeChrome();
 
+            // Files and links dropped anywhere in the window open as tabs. The
+            // WebView2 surfaces take drops themselves: pages open files, and
+            // the chrome strip refuses them (see ChromeHtml).
+            AllowDrop = true;
+            DragEnter += OnWindowDragEnter;
+            DragOver += OnWindowDragEnter;
+            DragDrop += OnWindowDragDrop;
+
             // The suggestion list hangs outside the chrome strip, so it has to
             // go the moment the window it points at moves or changes size.
             Resize += delegate { HideSuggestions(); };
@@ -153,6 +162,7 @@ namespace SimpleBrowser
 
         private readonly List<string> _startupTabs;
         private readonly int _startupActive;
+        private readonly List<bool> _startupPinned;
 
         /// <summary>True when this window is a private window.</summary>
         public bool IsPrivate { get { return _privateMode; } }
@@ -166,12 +176,22 @@ namespace SimpleBrowser
         {
             if (_startupTabs != null && _startupTabs.Count > 0)
             {
-                foreach (string url in _startupTabs) AddNewTab(url);
+                for (int i = 0; i < _startupTabs.Count; i++)
+                {
+                    AddNewTab(_startupTabs[i]);
+                    if (_startupPinned != null && i < _startupPinned.Count && _startupPinned[i])
+                    {
+                        var tab = ActiveTab;
+                        if (tab != null) tab.SetPinned(true);
+                    }
+                }
 
                 if (_startupActive >= 0 && _startupActive < _tabControl.TabPages.Count)
                 {
                     _tabControl.SelectedIndex = _startupActive;
                 }
+
+                SyncTabs();
                 return;
             }
 
@@ -381,6 +401,12 @@ namespace SimpleBrowser
                     case "new_tab":
                         AddNewTab();
                         break;
+                    case "open_url":
+                        {
+                            string dropped = ExtractJsonField(json, "url");
+                            if (!string.IsNullOrEmpty(dropped)) AddNewTab(dropped);
+                            break;
+                        }
                     case "new_window":
                         NewWindow(false);
                         break;
@@ -546,10 +572,24 @@ namespace SimpleBrowser
         }
 
         /// <summary>
+        /// Opens a page without leaving the one in front, the way a middle
+        /// click or a Ctrl+click asks for.
+        /// </summary>
+        public void AddNewTabInBackground(string url)
+        {
+            InsertTab(url, _tabControl.TabPages.Count, false);
+        }
+
+        /// <summary>
         /// Adds a tab at a given place in the strip. A duplicate lands next to
         /// the tab it came from rather than at the far end.
         /// </summary>
         public void AddNewTabAt(string url, int index)
+        {
+            InsertTab(url, index, true);
+        }
+
+        private void InsertTab(string url, int index, bool select)
         {
             var tab = new BrowserTab(url, _privateMode);
             tab.UrlChanged += OnTabUrlChanged;
@@ -570,10 +610,14 @@ namespace SimpleBrowser
             tab.ContextMenuRequested += OnTabContextMenuRequested;
             tab.AcceleratorPressed += OnTabAcceleratorPressed;
             tab.FocusChromeRequested += OnTabFocusChromeRequested;
+            tab.PageLanguageDetected += OnTabPageLanguageDetected;
+            tab.TranslateAction += OnTabTranslateAction;
+            tab.TranslateFinished += OnTabTranslateFinished;
+            tab.OpenTabRequested += OnTabOpenTabRequested;
 
             if (index < 0 || index > _tabControl.TabPages.Count) index = _tabControl.TabPages.Count;
             _tabControl.TabPages.Insert(index, tab);
-            _tabControl.SelectedTab = tab;
+            if (select) _tabControl.SelectedTab = tab;
 
             // A brand new tab hands the keyboard to the address bar, the way
             // every serious browser does: it is ready to type before anything
@@ -631,6 +675,8 @@ namespace SimpleBrowser
             duplicate.Enabled = hasPage;
             menu.Items.Add(duplicate);
 
+            menu.Items.Add(MenuAction(tab.IsPinned ? "Unpin Tab" : "Pin Tab", delegate { TogglePinned(index); }));
+
             menu.Items.Add(MenuAction(tab.IsMuted ? "Unmute Tab" : "Mute Tab", delegate { ToggleTabMute(index); }));
 
             var copyLink = MenuAction("Copy Page Address", delegate { CopyText(url); });
@@ -663,6 +709,57 @@ namespace SimpleBrowser
             SyncTabs();
         }
 
+        /// <summary>How many tabs at the left of the strip are pinned.</summary>
+        private int CountPinned()
+        {
+            int count = 0;
+            for (int i = 0; i < _tabControl.TabPages.Count; i++)
+            {
+                var page = _tabControl.TabPages[i] as BrowserTab;
+                if (page != null && page.IsPinned) count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Pins or unpins a tab and puts it where it belongs: pinned tabs keep
+        /// to the left of the strip, normal ones start just after them.
+        /// </summary>
+        private void TogglePinned(int index)
+        {
+            var tab = TabAt(index);
+            if (tab == null) return;
+
+            tab.SetPinned(!tab.IsPinned);
+
+            int target = tab.IsPinned ? CountPinned() - 1 : CountPinned();
+            if (target != index) MoveTabTo(index, target);
+
+            if (!_privateMode) SessionStore.Touch();
+            SyncTabs();
+        }
+
+        /// <summary>Moves a page to an exact place, without the drag maths.</summary>
+        private void MoveTabTo(int from, int to)
+        {
+            if (from < 0 || from >= _tabControl.TabPages.Count) return;
+            if (to < 0) to = 0;
+            if (to > _tabControl.TabPages.Count - 1) to = _tabControl.TabPages.Count - 1;
+            if (to == from) return;
+
+            var page = _tabControl.TabPages[from];
+            var active = _tabControl.SelectedTab;
+            _tabControl.TabPages.RemoveAt(from);
+            _tabControl.TabPages.Insert(to, page);
+
+            // Pinning a page in the background must not pull it in front.
+            if (active != null && active != page) _tabControl.SelectedTab = active;
+            else _tabControl.SelectedTab = page;
+
+            if (!_privateMode) SessionStore.Touch();
+            SyncTabs();
+        }
+
         /// <summary>
         /// Moves a tab to another place in the strip. The index arrives counted
         /// in the old order, so a move to the right lands one place earlier.
@@ -674,6 +771,19 @@ namespace SimpleBrowser
             int target = to > from ? to - 1 : to;
             if (target < 0) target = 0;
             if (target > _tabControl.TabPages.Count - 1) target = _tabControl.TabPages.Count - 1;
+
+            // The pinned block stays on the left; a drag can never mix the two.
+            var moving = _tabControl.TabPages[from] as BrowserTab;
+            int pinned = CountPinned();
+            if (moving != null && moving.IsPinned)
+            {
+                if (target > pinned - 1) target = pinned - 1;
+            }
+            else if (target < pinned)
+            {
+                target = pinned;
+            }
+
             if (target == from) return;
 
             var page = _tabControl.TabPages[from];
@@ -689,7 +799,14 @@ namespace SimpleBrowser
         {
             for (int i = _tabControl.TabPages.Count - 1; i >= 0; i--)
             {
-                if (i != keep) CloseTabAt(i);
+                if (i == keep) continue;
+
+                // Pinned tabs are the ones the user asked to keep around, so
+                // closing "the others" leaves them where they are.
+                var page = _tabControl.TabPages[i] as BrowserTab;
+                if (page != null && page.IsPinned) continue;
+
+                CloseTabAt(i);
             }
         }
 
@@ -904,6 +1021,10 @@ namespace SimpleBrowser
         {
             var session = new WindowSession();
 
+            // -1 means "not found yet", which is how the loop below knows the
+            // active page is still to come.
+            session.Active = -1;
+
             for (int i = 0; i < _tabControl.TabPages.Count; i++)
             {
                 var tab = _tabControl.TabPages[i] as BrowserTab;
@@ -916,6 +1037,7 @@ namespace SimpleBrowser
 
                 if (session.Active < 0 && i == _tabControl.SelectedIndex) session.Active = session.Tabs.Count;
                 session.Tabs.Add(url);
+                session.Pinned.Add(tab.IsPinned);
             }
 
             if (session.Active < 0) session.Active = 0;
@@ -1384,8 +1506,38 @@ namespace SimpleBrowser
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Bookmark This Page\u2026", null, delegate { AddBookmarkDialog(); }));
             menu.Items.Add(new ToolStripMenuItem("Manage Bookmarks\u2026", null, delegate { ShowBookmarks(); }));
+            menu.Items.Add(new ToolStripMenuItem("Export Bookmarks\u2026", null, delegate { ExportBookmarks(); }));
 
             ShowChromeMenu(menu, cssX, cssY);
+        }
+
+        /// <summary>
+        /// Saves the collection as a Netscape bookmarks file, the shape every
+        /// other browser imports.
+        /// </summary>
+        private void ExportBookmarks()
+        {
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = "Export Bookmarks";
+                dialog.Filter = "Bookmarks HTML (*.html)|*.html|All files (*.*)|*.*";
+                dialog.FileName = "bookmarks.html";
+                dialog.AddExtension = true;
+
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                try
+                {
+                    _bookmarkManager.ExportNetscape(dialog.FileName);
+                    ChromeToast("Bookmarks exported to " + System.IO.Path.GetFileName(dialog.FileName));
+                }
+                catch (Exception error)
+                {
+                    MessageBox.Show(this,
+                        "The bookmarks could not be saved.\n\n" + error.Message,
+                        "Export Bookmarks", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
         }
 
         private void RenameBookmark(string url, string currentTitle)
@@ -1517,10 +1669,11 @@ namespace SimpleBrowser
                     if (url == "about:home") url = "";
                 }
 
-                tabItems.Add(string.Format("{{\"title\":\"{0}\",\"url\":\"{1}\",\"icon\":\"{2}\",\"audio\":{3},\"muted\":{4}}}",
+                tabItems.Add(string.Format("{{\"title\":\"{0}\",\"url\":\"{1}\",\"icon\":\"{2}\",\"audio\":{3},\"muted\":{4},\"pinned\":{5}}}",
                     EscapeJs(title), EscapeJs(url), EscapeJs(icon),
                     browserTab != null && browserTab.IsPlayingAudio ? "true" : "false",
-                    browserTab != null && browserTab.IsMuted ? "true" : "false"));
+                    browserTab != null && browserTab.IsMuted ? "true" : "false",
+                    browserTab != null && browserTab.IsPinned ? "true" : "false"));
             }
             string json = "[" + string.Join(",", tabItems.ToArray()) + "]";
             int activeIndex = _tabControl.SelectedIndex;
@@ -1605,6 +1758,87 @@ namespace SimpleBrowser
         private void OnTabFocusChromeRequested(BrowserTab tab)
         {
             if (tab != null && ReferenceEquals(tab, ActiveTab)) FocusUrlBar(true);
+        }
+
+        /// <summary>A page asked for a link to open in a tab of its own.</summary>
+        private void OnTabOpenTabRequested(BrowserTab tab, string url, bool background)
+        {
+            if (background) AddNewTabInBackground(url);
+            else AddNewTab(url);
+        }
+
+        // ── Dropped files and links ──────────────────────────────────────────
+
+        private void OnWindowDragEnter(object sender, DragEventArgs e)
+        {
+            bool wanted = e.Data != null &&
+                (e.Data.GetDataPresent(DataFormats.FileDrop) ||
+                 e.Data.GetDataPresent(DataFormats.UnicodeText));
+            e.Effect = wanted ? DragDropEffects.Copy : DragDropEffects.None;
+        }
+
+        /// <summary>
+        /// A file dropped on Toge opens right there, in a tab of its own; a
+        /// dragged link opens the same way. Anything else is left alone.
+        /// </summary>
+        private void OnWindowDragDrop(object sender, DragEventArgs e)
+        {
+            var urls = DroppedUrls(e.Data);
+            if (urls.Count == 0) return;
+
+            foreach (string url in urls) AddNewTab(url);
+            e.Effect = DragDropEffects.Copy;
+        }
+
+        private static List<string> DroppedUrls(IDataObject data)
+        {
+            var urls = new List<string>();
+            if (data == null) return urls;
+
+            if (data.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = data.GetData(DataFormats.FileDrop) as string[];
+                if (files == null) return urls;
+
+                foreach (string file in files)
+                {
+                    if (string.IsNullOrEmpty(file)) continue;
+                    try
+                    {
+                        urls.Add(new Uri(Path.GetFullPath(file)).AbsoluteUri);
+                    }
+                    catch
+                    {
+                        // A path that cannot be read is simply not opened.
+                    }
+                }
+
+                return urls;
+            }
+
+            if (data.GetDataPresent(DataFormats.UnicodeText))
+            {
+                string text = (data.GetData(DataFormats.UnicodeText) as string ?? string.Empty).Trim();
+                if (text.Length == 0) return urls;
+
+                // A dragged link is a single line; a dragged paragraph is not.
+                if (text.IndexOf('\n') < 0 && text.IndexOf('\r') < 0)
+                {
+                    if (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                        || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                        || text.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        urls.Add(text);
+                    }
+                    else if (File.Exists(text))
+                    {
+                        try { urls.Add(new Uri(Path.GetFullPath(text)).AbsoluteUri); }
+                        catch { }
+                    }
+                }
+            }
+
+            return urls;
         }
 
         /// <summary>
@@ -2033,6 +2267,78 @@ namespace SimpleBrowser
         /// under the pointer, so the menu knows a link from an image and offers
         /// only the actions that fit, the way a browser's own menu does.
         /// </summary>
+        /// <summary>
+        /// A page has said which language it is in. A non-English page gets the
+        /// translate bubble, unless the user asked never to be troubled or to
+        /// always translate without asking.
+        /// </summary>
+        private void OnTabPageLanguageDetected(BrowserTab tab, string code)
+        {
+            if (tab == null || tab.IsDisposed || !tab.CanTranslate) return;
+            if (string.IsNullOrEmpty(code)) return;
+            if (string.Equals(code, "en", StringComparison.OrdinalIgnoreCase)) return;
+            if (tab.TranslatePrompted) return;
+
+            bool always = Settings.Current.TranslateAlways;
+            bool ask = Settings.Current.TranslateAsk;
+            if (!always && !ask) return;
+
+            // One question per page, however many times the page reports.
+            tab.TranslatePrompted = true;
+
+            if (always)
+            {
+                tab.TranslatePage(false);
+                return;
+            }
+
+            tab.ShowTranslatePrompt(code);
+        }
+
+        /// <summary>Answers a button in the translate bubble.</summary>
+        private void OnTabTranslateAction(BrowserTab tab, string action)
+        {
+            if (tab == null || tab.IsDisposed) return;
+
+            switch (action)
+            {
+                case "translate":
+                    tab.TranslatePage();
+                    break;
+
+                case "original":
+                    tab.ShowOriginalPage();
+                    break;
+
+                case "never":
+                    Settings.Current.Set("translateAsk", false);
+                    tab.CloseTranslatePrompt();
+                    ChromeToast("Toge will not ask about translations again");
+                    break;
+
+                case "always":
+                    Settings.Current.Set("translateAlways", true);
+                    tab.TranslatePage();
+                    ChromeToast("Non-English pages will be translated automatically");
+                    break;
+
+                case "close":
+                    tab.CloseTranslatePrompt();
+                    break;
+            }
+        }
+
+        private void OnTabTranslateFinished(BrowserTab tab, bool ok)
+        {
+            if (!ok)
+            {
+                ChromeToast("This page could not be translated");
+                return;
+            }
+
+            ChromeToast("Page translated to " + Translator.LanguageName(Settings.Current.TranslateLanguage));
+        }
+
         private void OnTabContextMenuRequested(BrowserTab tab, CoreWebView2ContextMenuRequestedEventArgs e)
         {
             if (tab == null || tab != ActiveTab)
@@ -2062,6 +2368,7 @@ namespace SimpleBrowser
             {
                 string link = target.LinkUri;
                 menu.Items.Add(MenuAction("Open Link in New Tab", delegate { AddNewTab(link); }));
+                menu.Items.Add(MenuAction("Open Link in Background Tab", delegate { AddNewTabInBackground(link); }));
                 menu.Items.Add(MenuAction("Open Link in New Window", delegate { NewWindowWith(link); }));
                 menu.Items.Add(MenuAction("Open Link in Private Window", delegate { OpenInPrivateWindow(link); }));
                 menu.Items.Add(new ToolStripSeparator());
@@ -2111,6 +2418,17 @@ namespace SimpleBrowser
             menu.Items.Add(forward);
             menu.Items.Add(MenuAction("Reload", delegate { if (ActiveTab != null) ActiveTab.Reload(); }));
             menu.Items.Add(new ToolStripSeparator());
+            if (tab.CanTranslate)
+            {
+                menu.Items.Add(MenuAction(tab.IsTranslated ? "Show Original Page" : "Translate Page",
+                    delegate
+                    {
+                        if (tab.IsTranslated) tab.ShowOriginalPage();
+                        else tab.TranslatePage();
+                    }));
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
             menu.Items.Add(MenuAction("Find on Page\u2026", delegate { tab.ToggleFind(); }));
             menu.Items.Add(MenuAction("Save Page As\u2026", delegate { SavePage(); }));
             menu.Items.Add(MenuAction("Print\u2026", delegate { PrintPage(tab); }));
@@ -3330,6 +3648,24 @@ namespace SimpleBrowser
                 if (string.IsNullOrEmpty(folder)) folder = DefaultDownloadFolder();
                 if (string.IsNullOrEmpty(name)) name = "download";
 
+                // A file that runs on this PC deserves a second look before it
+                // lands, especially one the page named for itself.
+                if (IsRiskyDownload(name))
+                {
+                    string source = HostOf(operation.Uri);
+                    string question = "\u201c" + name + "\u201d is a program or script that runs on this PC."
+                        + (source.Length > 0 ? "\n\nIt comes from " + source + "." : string.Empty)
+                        + "\n\nDownload it anyway?";
+
+                    if (MessageBox.Show(this, question, "This file may be dangerous",
+                            MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                            MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+                }
+
                 if (Settings.Current.AskDownloadPath)
                 {
                     string chosen = AskForSavePath(folder, name);
@@ -3427,6 +3763,64 @@ namespace SimpleBrowser
             if (operation == null) return 0;
             if (!operation.TotalBytesToReceive.HasValue) return 0;
             return (long)operation.TotalBytesToReceive.Value;
+        }
+
+        /// <summary>
+        /// File kinds that run on this PC — programs, installers, scripts and
+        /// shortcuts. A page may hand one over without the name suggesting it,
+        /// so the extension is what counts.
+        /// </summary>
+        private static bool IsRiskyDownload(string name)
+        {
+            string extension = Path.GetExtension(name ?? string.Empty).ToLowerInvariant();
+            switch (extension)
+            {
+                case ".exe":
+                case ".msi":
+                case ".msp":
+                case ".bat":
+                case ".cmd":
+                case ".com":
+                case ".scr":
+                case ".pif":
+                case ".vbs":
+                case ".vbe":
+                case ".js":
+                case ".jse":
+                case ".wsf":
+                case ".wsh":
+                case ".ps1":
+                case ".psm1":
+                case ".hta":
+                case ".cpl":
+                case ".jar":
+                case ".reg":
+                case ".lnk":
+                case ".dll":
+                case ".iso":
+                case ".img":
+                case ".apk":
+                case ".dmg":
+                case ".pkg":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>The site a download came from, for the warning to name.</summary>
+        private static string HostOf(string url)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(url)) return string.Empty;
+                var uri = new Uri(url);
+                return uri.Host;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static string InterruptText(CoreWebView2DownloadInterruptReason reason)
@@ -4040,6 +4434,14 @@ namespace SimpleBrowser
             });
             findItem.ShortcutKeyDisplayString = "Ctrl+F";
 
+            var translateItem = new ToolStripMenuItem("Translate Page", null, delegate
+            {
+                var current = ActiveTab;
+                if (current == null) return;
+                if (current.IsTranslated) current.ShowOriginalPage();
+                else current.TranslatePage();
+            });
+
             var downloadsItem = new ToolStripMenuItem("Downloads", null, delegate { ShowDownloads(); });
             downloadsItem.ShortcutKeyDisplayString = "Ctrl+J";
 
@@ -4093,6 +4495,13 @@ namespace SimpleBrowser
                 bookmarksBarItem.Text = bar ? "Hide Bookmarks Bar" : "Show Bookmarks Bar";
 
                 reopenItem.Enabled = _closedTabs.Count > 0;
+
+                var page = ActiveTab;
+                bool translatable = page != null && page.CanTranslate;
+                translateItem.Enabled = translatable;
+                translateItem.Text = translatable && page.IsTranslated
+                    ? "Show Original Page"
+                    : "Translate Page";
             };
 
             var aboutItem = new ToolStripMenuItem("About Toge", null, delegate { ShowAbout(); });
@@ -4108,6 +4517,7 @@ namespace SimpleBrowser
             menu.Items.Add(reopenWindowItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(findItem);
+            menu.Items.Add(translateItem);
             menu.Items.Add(downloadsItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(bookmarksItem);

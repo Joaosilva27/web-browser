@@ -659,5 +659,80 @@ namespace SimpleBrowser
                 // Ignore persistence errors silently.
             }
         }
+
+        // ── Export ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Writes the whole collection as a Netscape bookmarks file — the plain
+        /// HTML shape Chrome, Edge, Firefox and Safari all import. Folders keep
+        /// their nesting, and each folder becomes a list inside its parent.
+        /// </summary>
+        public void ExportNetscape(string path)
+        {
+            var builder = new System.Text.StringBuilder();
+            builder.AppendLine("<!DOCTYPE NETSCAPE-Bookmark-file-1>");
+            builder.AppendLine("<!-- This is an automatically generated file. It will be read and overwritten. -->");
+            builder.AppendLine("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">");
+            builder.AppendLine("<TITLE>Bookmarks</TITLE>");
+            builder.AppendLine("<H1>Bookmarks</H1>");
+            builder.AppendLine("<DL><p>");
+
+            foreach (var bookmark in GetBookmarks(string.Empty, false))
+            {
+                AppendBookmark(builder, bookmark, "    ");
+            }
+
+            foreach (string folder in GetChildFolders(string.Empty))
+            {
+                AppendFolder(builder, folder, "    ");
+            }
+
+            builder.AppendLine("</DL><p>");
+
+            File.WriteAllText(path, builder.ToString(), new System.Text.UTF8Encoding(true));
+        }
+
+        private void AppendFolder(System.Text.StringBuilder builder, string folder, string indent)
+        {
+            builder.Append(indent).Append("<DT><H3>")
+                .Append(HtmlText(NameOf(folder))).Append("</H3>").AppendLine();
+            builder.Append(indent).Append("<DL><p>").AppendLine();
+
+            foreach (var bookmark in GetBookmarks(folder, false))
+            {
+                AppendBookmark(builder, bookmark, indent + "    ");
+            }
+
+            foreach (string child in GetChildFolders(folder))
+            {
+                AppendFolder(builder, child, indent + "    ");
+            }
+
+            builder.Append(indent).Append("</DL><p>").AppendLine();
+        }
+
+        private static void AppendBookmark(System.Text.StringBuilder builder, BookmarkItem bookmark, string indent)
+        {
+            string title = string.IsNullOrEmpty(bookmark.Title) ? bookmark.Url : bookmark.Title;
+
+            builder.Append(indent).Append("<DT><A HREF=\"")
+                .Append(HtmlText(bookmark.Url)).Append("\"");
+            if (!string.IsNullOrEmpty(bookmark.Icon))
+            {
+                builder.Append(" ICON=\"").Append(HtmlText(bookmark.Icon)).Append("\"");
+            }
+            builder.Append(">").Append(HtmlText(title)).Append("</A>").AppendLine();
+        }
+
+        private static string HtmlText(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+
+            return value
+                .Replace("&", "&amp;")
+                .Replace("<", "&lt;")
+                .Replace(">", "&gt;")
+                .Replace("\"", "&quot;");
+        }
     }
 }

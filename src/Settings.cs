@@ -211,6 +211,24 @@ namespace SimpleBrowser
             get { return Json.GetBool(_values, "showSearch", true); }
         }
 
+        /// <summary>The language Translate turns pages into ("pt", "en", ...).</summary>
+        public string TranslateLanguage
+        {
+            get { return Json.GetString(_values, "translateLang") ?? "pt"; }
+        }
+
+        /// <summary>False once the user has said "Never ask again".</summary>
+        public bool TranslateAsk
+        {
+            get { return Json.GetBool(_values, "translateAsk", true); }
+        }
+
+        /// <summary>When on, non-English pages are translated without asking.</summary>
+        public bool TranslateAlways
+        {
+            get { return Json.GetBool(_values, "translateAlways", false); }
+        }
+
         // ── Start-page wallpaper ─────────────────────────────────────────────
 
         /// <summary>"toge" (the default), "gradient", "color" or "image".</summary>
@@ -401,6 +419,19 @@ namespace SimpleBrowser
                 case "askdownloadpath":
                     _values["askDownloadPath"] = AsBool(value, AskDownloadPath);
                     break;
+                case "translateask":
+                    _values["translateAsk"] = AsBool(value, TranslateAsk);
+                    break;
+                case "translatealways":
+                    _values["translateAlways"] = AsBool(value, TranslateAlways);
+                    break;
+                case "translatelang":
+                    {
+                        string code = value as string;
+                        if (string.IsNullOrEmpty(code) || code.Length > 10) return false;
+                        _values["translateLang"] = code.ToLowerInvariant();
+                        break;
+                    }
                 default:
                     return false;
             }

@@ -90,7 +90,7 @@ namespace SimpleBrowser
             {
                 foreach (var session in restored)
                 {
-                    windows.Add(new MainForm(false, session.Tabs, session.Active));
+                    windows.Add(new MainForm(false, session.Tabs, session.Active, session.Pinned));
                 }
             }
 

@@ -210,6 +210,18 @@ namespace SimpleBrowser
         box-shadow: var(--tab-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
+    /* A pinned tab is just its icon: no title, no close button. */
+    .tab.pinned {
+        width: 46px;
+        min-width: 46px;
+        max-width: 46px;
+        padding: 0 6px;
+        justify-content: center;
+        gap: 0;
+    }
+    .tab.pinned .tab-title { display: none; }
+    .tab.pinned .tab-x { display: none; }
+
     .tab-fav {
         width: 15px;
         height: 15px;
@@ -1534,6 +1546,8 @@ namespace SimpleBrowser
                     tab.appendChild(fav);
                     tab.appendChild(label);
 
+                    if (info.pinned) { tab.classList.add('pinned'); }
+
                     // A speaker only appears while the tab has something to say,
                     // and it stays put once muted so silence can be undone.
                     if (info.audio || info.muted) {
@@ -1560,6 +1574,7 @@ namespace SimpleBrowser
                     }
 
                     tab.appendChild(close);
+                    if (info.pinned) { close.remove(); }
 
                     if (info.audio) { tab.classList.add('audio'); }
                     if (info.muted) { tab.classList.add('muted'); }
@@ -1733,6 +1748,23 @@ namespace SimpleBrowser
     };
 
     renderUrl();
+
+    // A dragged file must never steer the toolbar away from Toge's own chrome.
+    // A dragged link is handed to the host, which opens it as a tab.
+    document.addEventListener('dragover', function (e) {
+        e.preventDefault();
+    });
+
+    document.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (!e.dataTransfer) { return; }
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { return; }
+
+        var url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+        if (!url) { return; }
+        url = url.split('\n')[0].trim();
+        if (url) { post('open_url', { url: url }); }
+    });
 </script>
 </body>
 </html>";

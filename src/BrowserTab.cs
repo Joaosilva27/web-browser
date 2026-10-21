@@ -24,6 +24,12 @@ namespace SimpleBrowser
         private bool _isSettings;
         private bool _privateMode;
 
+        /// <summary>True while the page on screen holds translated text.</summary>
+        private bool _translated;
+
+        /// <summary>Whether a finished translation should offer to go back.</summary>
+        private bool _translateAnnounce = true;
+
         /// <summary>
         /// Where the page was scrolled to, as last reported by the page. Hiding
         /// a WebView2 to switch tabs makes the engine draw the page from the
@@ -83,6 +89,22 @@ namespace SimpleBrowser
         /// </summary>
         public event Action<BrowserTab, int, CoreWebView2AcceleratorKeyPressedEventArgs> AcceleratorPressed;
 
+        /// <summary>Raised when a loaded page reports the language it is in.</summary>
+        public event Action<BrowserTab, string> PageLanguageDetected;
+
+        /// <summary>Raised when a button in the translate bubble is pressed.</summary>
+        public event Action<BrowserTab, string> TranslateAction;
+
+        /// <summary>Raised when a translation finishes; false when nothing landed.</summary>
+        public event Action<BrowserTab, bool> TranslateFinished;
+
+        /// <summary>
+        /// Raised when a link was asked for in the background — a middle click
+        /// or a Ctrl+click. The page sends the address; the host opens the tab
+        /// without leaving the page in front.
+        /// </summary>
+        public event Action<BrowserTab, string, bool> OpenTabRequested;
+
         public WebView2 WebView { get { return _webView; } }
         public string CurrentUrl { get; private set; }
         public string DisplayTitle { get; private set; }
@@ -90,6 +112,36 @@ namespace SimpleBrowser
         public bool IsLoading { get { return _isLoading; } }
         /// <summary>True when this tab lives in a private window.</summary>
         public bool IsPrivate { get { return _privateMode; } }
+
+        /// <summary>True when the tab is pinned to the left of the strip.</summary>
+        public bool IsPinned { get; private set; }
+
+        /// <summary>Pins or releases the tab; the host puts it in its place.</summary>
+        public void SetPinned(bool pinned)
+        {
+            IsPinned = pinned;
+        }
+
+        /// <summary>True while the page on screen holds translated text.</summary>
+        public bool IsTranslated { get { return _translated; } }
+
+        /// <summary>True once this page has prompted, so it asks at most once.</summary>
+        public bool TranslatePrompted { get; set; }
+
+        /// <summary>True when this tab is showing a page Translate can work on.</summary>
+        public bool CanTranslate
+        {
+            get
+            {
+                if (!_isInitialized || _webView.CoreWebView2 == null) return false;
+                if (_isHome || _isSettings) return false;
+
+                string url = CurrentUrl ?? string.Empty;
+                return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                    || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                    || url.StartsWith("file://", StringComparison.OrdinalIgnoreCase);
+            }
+        }
 
         /// <summary>True while the page is making sound, which is what puts the
         /// speaker on the tab.</summary>
@@ -252,6 +304,8 @@ namespace SimpleBrowser
 
                 _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
                 await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(ScrollScript);
+                await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(NewTabScript);
+                await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(TranslateScript.Source);
 
                 _webView.CoreWebView2.NavigationStarting += OnNavigationStarting;
                 _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
@@ -629,6 +683,195 @@ namespace SimpleBrowser
             }
         }
 
+        /// <summary>
+        /// Translates the page in place, into the language the settings name.
+        /// The text is collected by the injected script, translated off the UI
+        /// thread and then put back into the same nodes.
+        /// </summary>
+        public void TranslatePage(bool announce)
+        {
+            if (!CanTranslate) return;
+
+            _translateAnnounce = announce;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.__togeTranslate && window.__togeTranslate.collect()");
+            }
+            catch
+            {
+                // A tab that is going away can refuse; nothing to translate.
+            }
+        }
+
+        public void TranslatePage()
+        {
+            TranslatePage(true);
+        }
+
+        /// <summary>Puts the page's own words back and forgets the translation.</summary>
+        public void ShowOriginalPage()
+        {
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.__togeTranslate && window.__togeTranslate.restore()");
+            }
+            catch { }
+
+            _translated = false;
+        }
+
+        /// <summary>Draws the ask bubble on the page, in English names.</summary>
+        public void ShowTranslatePrompt(string code)
+        {
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+
+            string target = Settings.Current.TranslateLanguage;
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.__togeTranslate && window.__togeTranslate.ask("
+                    + JsString(Translator.LanguageName(code)) + ","
+                    + JsString(Translator.LanguageName(target)) + ")");
+            }
+            catch { }
+        }
+
+        public void CloseTranslatePrompt()
+        {
+            if (!_isInitialized || _webView.CoreWebView2 == null) return;
+
+            try
+            {
+                _webView.CoreWebView2.ExecuteScriptAsync(
+                    "window.__togeTranslate && window.__togeTranslate.close()");
+            }
+            catch { }
+        }
+
+        private static string JsString(string text)
+        {
+            return "\"" + Json.Escape(text) + "\"";
+        }
+
+        /// <summary>
+        /// The page has handed over its text. One worker does the whole page so
+        /// the window never waits on the network.
+        /// </summary>
+        private void BeginTranslation(string payload)
+        {
+            if (string.IsNullOrEmpty(payload)) return;
+
+            string[] texts = payload.Split('\u0001');
+            if (texts.Length == 0) return;
+
+            string target = Settings.Current.TranslateLanguage;
+            var tab = this;
+            Task.Run(delegate { tab.RunTranslation(texts, target); });
+        }
+
+        private void RunTranslation(string[] texts, string target)
+        {
+            var results = new string[texts.Length];
+            bool any = false;
+
+            int start = 0;
+            while (start < texts.Length)
+            {
+                var indexes = new System.Collections.Generic.List<int>();
+                var group = new System.Collections.Generic.List<string>();
+                int chars = 0;
+
+                while (start < texts.Length &&
+                       (chars == 0 || chars + texts[start].Length < Translator.MaxBatchChars))
+                {
+                    indexes.Add(start);
+                    group.Add(texts[start]);
+                    chars += texts[start].Length + 10;
+                    start++;
+                }
+
+                var translated = Translator.TranslateMany(group, target);
+                if (translated == null) continue;
+
+                for (int k = 0; k < translated.Count && k < indexes.Count; k++)
+                {
+                    if (string.IsNullOrEmpty(translated[k])) continue;
+                    results[indexes[k]] = translated[k];
+                    any = true;
+                }
+            }
+
+            if (!any)
+            {
+                PostTranslateFinished(false);
+                return;
+            }
+
+            _translated = true;
+
+            var idx = new System.Text.StringBuilder("[");
+            var txt = new System.Text.StringBuilder("[");
+            bool first = true;
+            for (int i = 0; i < results.Length; i++)
+            {
+                if (results[i] == null) continue;
+                if (!first) { idx.Append(','); txt.Append(','); }
+                first = false;
+                idx.Append(i);
+                txt.Append(JsString(results[i]));
+            }
+            idx.Append(']');
+            txt.Append(']');
+
+            string script = "window.__togeTranslate && window.__togeTranslate.apply("
+                + idx + "," + txt + ")";
+
+            bool announce = _translateAnnounce;
+            var apply = script;
+            string banner = "window.__togeTranslate && window.__togeTranslate.done("
+                + JsString(Translator.LanguageName(target)) + ")";
+
+            try
+            {
+                _webView.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        _webView.CoreWebView2.ExecuteScriptAsync(apply);
+                        if (announce) _webView.CoreWebView2.ExecuteScriptAsync(banner);
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+
+            PostTranslateFinished(true);
+        }
+
+        private void PostTranslateFinished(bool ok)
+        {
+            var handler = TranslateFinished;
+            if (handler == null) return;
+
+            try
+            {
+                if (IsHandleCreated && InvokeRequired)
+                {
+                    BeginInvoke((MethodInvoker)delegate { handler(this, ok); });
+                }
+                else
+                {
+                    handler(this, ok);
+                }
+            }
+            catch { }
+        }
+
         public void Navigate(string destination)
         {
             if (string.IsNullOrWhiteSpace(destination))
@@ -809,6 +1052,8 @@ namespace SimpleBrowser
         {
             _isLoading = true;
             _scrollY = 0;
+            _translated = false;
+            TranslatePrompted = false;
             HideCrashCover();
 
             if (!string.IsNullOrEmpty(e.Uri))
@@ -1118,6 +1363,42 @@ namespace SimpleBrowser
             try { text = e.TryGetWebMessageAsString(); }
             catch { }
 
+            // Translate talks from every page, not only Toge's own, so it is
+            // answered before the internal-page gate below.
+            if (text != null && text.StartsWith("toge-lang:", StringComparison.Ordinal))
+            {
+                var heard = PageLanguageDetected;
+                if (heard != null) heard(this, text.Substring(10));
+                return;
+            }
+
+            if (text != null && text.StartsWith("toge-bubble:", StringComparison.Ordinal))
+            {
+                var pressed = TranslateAction;
+                if (pressed != null) pressed(this, text.Substring(12));
+                return;
+            }
+
+            if (text != null && text.StartsWith("toge-tx:", StringComparison.Ordinal))
+            {
+                BeginTranslation(text.Substring(8));
+                return;
+            }
+
+            if (text != null && text.StartsWith(NewTabPrefix, StringComparison.Ordinal)
+                && text.Length > NewTabPrefix.Length)
+            {
+                bool background = text[NewTabPrefix.Length] == '1';
+                string address = text.Substring(NewTabPrefix.Length + 1);
+                if (address.Length > 0)
+                {
+                    var asked = OpenTabRequested;
+                    if (asked != null) asked(this, address, background);
+                }
+
+                return;
+            }
+
             if (text != null && text.StartsWith(ScrollPrefix, StringComparison.Ordinal))
             {
                 double y;
@@ -1141,6 +1422,64 @@ namespace SimpleBrowser
         }
 
         private const string ScrollPrefix = "toge-scroll:";
+        private const string NewTabPrefix = "toge-newtab:";
+
+        /// <summary>
+        /// Background tabs. Middle click and Ctrl+click are the two gestures
+        /// every browser shares for "keep this page, open that link elsewhere";
+        /// the engine cannot tell the host the tab should stay in the back, so
+        /// the page reports the link and the host opens it quietly.
+        /// </summary>
+        private const string NewTabScript = @"(function () {
+    if (window.top !== window) { return; }
+    if (window.__togeNewTabs) { return; }
+    window.__togeNewTabs = true;
+
+    function anchorFrom(node) {
+        while (node && node !== document) {
+            if (node.tagName === 'A' && node.href) { return node; }
+            node = node.parentNode;
+        }
+        return null;
+    }
+
+    function hand(url, background) {
+        try { chrome.webview.postMessage('" + NewTabPrefix + @"' + (background ? '1' : '0') + url); } catch (e) { }
+    }
+
+    document.addEventListener('auxclick', function (e) {
+        if (e.button !== 1) { return; }
+        var link = anchorFrom(e.target);
+        if (!link) { return; }
+        e.preventDefault();
+        e.stopPropagation();
+        hand(link.href, true);
+    }, true);
+
+    document.addEventListener('click', function (e) {
+        if (!e.ctrlKey || e.button !== 0) { return; }
+        var link = anchorFrom(e.target);
+        if (!link) { return; }
+        e.preventDefault();
+        e.stopPropagation();
+        hand(link.href, true);
+    }, true);
+
+    document.addEventListener('drop', function (e) {
+        if (!e.dataTransfer) { return; }
+        // Files belong to the engine, which opens them as it sees fit.
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { return; }
+
+        var url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+        if (!url) { return; }
+        url = url.split('\n')[0].trim();
+        if (!url) { return; }
+
+        e.preventDefault();
+        e.stopPropagation();
+        hand(url, false);
+    }, true);
+})();";
 
         /// <summary>
         /// Reports where the page is scrolled, so a tab can be put back where it
