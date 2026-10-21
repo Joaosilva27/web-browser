@@ -3032,6 +3032,10 @@ namespace SimpleBrowser
                     case 0xBB: action = "zoom_in"; break;                          // Ctrl++
                     case 0xBD: action = "zoom_out"; break;                         // Ctrl+-
                     case 0x30: action = "zoom_reset"; break;                       // Ctrl+0
+                    case 0x39: action = "tab_last"; break;                         // Ctrl+9: last tab
+                    case 0x31: case 0x32: case 0x33: case 0x34:                    // Ctrl+1..8: nth tab
+                    case 0x35: case 0x36: case 0x37: case 0x38:
+                        action = "tab_" + (vk - 0x30); break;
                 }
             }
             else if (alt && !ctrl)
@@ -3098,6 +3102,32 @@ namespace SimpleBrowser
         }
 
         /// <summary>
+        /// The fourth and fifth mouse buttons — Back and Forward on every
+        /// desktop mouse. The engine leaves them unclaimed, so they arrive
+        /// here first: a press anywhere in this window walks the tab's own
+        /// history, the way the big browsers do. While something else is in
+        /// front — a dialog, a menu — the press goes on its way.
+        /// </summary>
+        internal bool HandleMouseButton(IntPtr wParam, IntPtr lParam)
+        {
+            if (GetForegroundWindow() != Handle) return false;
+
+            long wp = wParam.ToInt64();
+            int button = (int)((wp >> 16) & 0xFFFF);
+            if (button != 1 && button != 2) return false;
+
+            var active = Form.ActiveForm;
+            if (active != null && !ReferenceEquals(active, this)) return false;
+
+            var tab = ActiveTab;
+            if (tab == null) return false;
+
+            if (button == 1) tab.GoBack();
+            else tab.GoForward();
+            return true;
+        }
+
+        /// <summary>
         /// Browser keys pressed in the page on show. Answering one marks it
         /// handled, which is what stops Chromium drawing its own find bar or
         /// reloading behind Toge's back; everything Toge does not claim keeps
@@ -3132,6 +3162,15 @@ namespace SimpleBrowser
                 case "forward": if (ActiveTab != null) ActiveTab.GoForward(); break;
                 case "next_tab": CycleTab(1); break;
                 case "prev_tab": CycleTab(-1); break;
+                case "tab_last": SelectTabIndex(int.MaxValue); break;
+                case "tab_1": SelectTabIndex(0); break;
+                case "tab_2": SelectTabIndex(1); break;
+                case "tab_3": SelectTabIndex(2); break;
+                case "tab_4": SelectTabIndex(3); break;
+                case "tab_5": SelectTabIndex(4); break;
+                case "tab_6": SelectTabIndex(5); break;
+                case "tab_7": SelectTabIndex(6); break;
+                case "tab_8": SelectTabIndex(7); break;
                 case "zoom_in": StepSiteZoom(1); break;
                 case "zoom_out": StepSiteZoom(-1); break;
                 case "zoom_reset": ResetSiteZoom(); break;
@@ -3170,6 +3209,18 @@ namespace SimpleBrowser
             SiteSettings.Current.SetZoom(tab.CurrentUrl, 100);
             tab.ApplySiteZoom();
             ChromeToast("100%");
+        }
+
+        /// <summary>Ctrl+1..9: the nth tab; the ninth lands on the last one,
+        /// like every other browser. A number past the end clamps.</summary>
+        private void SelectTabIndex(int index)
+        {
+            if (_tabControl == null || _tabControl.TabPages.Count == 0) return;
+
+            if (index >= _tabControl.TabPages.Count) index = _tabControl.TabPages.Count - 1;
+            if (index < 0) return;
+
+            _tabControl.SelectedIndex = index;
         }
 
         private void ShowHistory()
@@ -4337,6 +4388,11 @@ namespace SimpleBrowser
         {
             // WM_MOUSEWHEEL, caught here because the page never passes it on.
             if (m.Msg == 0x020A) return _form.HandleWheelZoom(m.WParam, m.LParam);
+
+            // WM_XBUTTONDOWN: the fourth and fifth buttons are Back and
+            // Forward on every desktop mouse, and the page would only ignore
+            // them. Caught before dispatch reaches any child control.
+            if (m.Msg == 0x020B) return _form.HandleMouseButton(m.WParam, m.LParam);
 
             // WM_KEYDOWN / WM_SYSKEYDOWN
             if (m.Msg != 0x0100 && m.Msg != 0x0104) return false;
