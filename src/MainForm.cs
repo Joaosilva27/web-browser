@@ -15,6 +15,7 @@ namespace SimpleBrowser
     {
         // Win32 constants for frameless resizing and dragging
         private const int WM_NCHITTEST = 0x84;
+        private const int WM_NCRBUTTONUP = 0x00A5;
         private const int WM_DPICHANGED = 0x02E0;
         private const int WM_GETMINMAXINFO = 0x24;
         private const int MONITOR_DEFAULTTONEAREST = 2;
@@ -28,12 +29,20 @@ namespace SimpleBrowser
         private const int HTBOTTOMLEFT = 16;
         private const int HTBOTTOMRIGHT = 17;
         private const int BorderResizeMargin = 6;
+        private const int WM_NCLBUTTONDOWN = 0x00A1;
+        private const int HTCAPTION = 2;
 
         [DllImport("user32.dll")]
         private static extern short GetKeyState(int nVirtKey);
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         // A ContextMenuStrip normally closes itself when you click outside it, but
         // the WebView2 (Chromium) child windows swallow those clicks. Watch the
@@ -391,6 +400,12 @@ namespace SimpleBrowser
                     case "window_max":
                         WindowState = (WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized);
                         break;
+                    case "window_drag":
+                        // The empty strip is drawn by the page but drags the
+                        // window like the title bar it sits on.
+                        ReleaseCapture();
+                        SendMessage(Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+                        break;
                     case "switch_tab":
                         int tabIdx = ExtractJsonInt(json, "index");
                         if (tabIdx >= 0 && tabIdx < _tabControl.TabPages.Count)
@@ -543,6 +558,9 @@ namespace SimpleBrowser
                     case "tab_move":
                         MoveTab(ExtractJsonInt(json, "from"), ExtractJsonInt(json, "to"));
                         break;
+                    case "strip_menu":
+                        ShowTabStripMenu(ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
+                        break;
                     case "site_info":
                         ShowSiteInfo(ExtractJsonInt(json, "x"), ExtractJsonInt(json, "y"));
                         break;
@@ -675,7 +693,24 @@ namespace SimpleBrowser
             duplicate.Enabled = hasPage;
             menu.Items.Add(duplicate);
 
+            menu.Items.Add(MenuAction("Move Tab to New Window",
+                delegate { MoveTabToNewWindow(index); }));
+
             menu.Items.Add(MenuAction(tab.IsPinned ? "Unpin Tab" : "Pin Tab", delegate { TogglePinned(index); }));
+
+            // A tab moves within its own block: pinned tabs keep to the left
+            // of the strip and normal ones start after them.
+            int pinned = CountPinned();
+            int leftLimit = tab.IsPinned ? 0 : pinned;
+            int rightLimit = tab.IsPinned ? pinned - 1 : _tabControl.TabPages.Count - 1;
+
+            var moveLeft = MenuAction("Move Tab Left", delegate { MoveTabTo(index, index - 1); });
+            moveLeft.Enabled = index > leftLimit;
+            menu.Items.Add(moveLeft);
+
+            var moveRight = MenuAction("Move Tab Right", delegate { MoveTabTo(index, index + 1); });
+            moveRight.Enabled = index < rightLimit;
+            menu.Items.Add(moveRight);
 
             menu.Items.Add(MenuAction(tab.IsMuted ? "Unmute Tab" : "Mute Tab", delegate { ToggleTabMute(index); }));
 
@@ -692,6 +727,10 @@ namespace SimpleBrowser
             var closeOthers = MenuAction("Close Other Tabs", delegate { CloseOtherTabs(index); });
             closeOthers.Enabled = _tabControl.TabPages.Count > 1;
             menu.Items.Add(closeOthers);
+
+            var closeLeft = MenuAction("Close Tabs to the Left", delegate { CloseTabsToLeft(index); });
+            closeLeft.Enabled = index > pinned;
+            menu.Items.Add(closeLeft);
 
             var closeRight = MenuAction("Close Tabs to the Right", delegate { CloseTabsToRight(index); });
             closeRight.Enabled = index < _tabControl.TabPages.Count - 1;
@@ -813,6 +852,150 @@ namespace SimpleBrowser
         private void CloseTabsToRight(int index)
         {
             for (int i = _tabControl.TabPages.Count - 1; i > index; i--) CloseTabAt(i);
+        }
+
+        /// <summary>Closes every tab to the left of this one; pinned tabs stay.</summary>
+        private void CloseTabsToLeft(int keep)
+        {
+            for (int i = keep - 1; i >= 0; i--)
+            {
+                var page = _tabControl.TabPages[i] as BrowserTab;
+                if (page != null && page.IsPinned) continue;
+
+                CloseTabAt(i);
+            }
+        }
+
+        /// <summary>
+        /// Shifts the tab in front one place along the strip. The pinned block
+        /// is a wall: a pinned tab never leaves it and a normal one never
+        /// enters it.
+        /// </summary>
+        private void MoveActiveTab(int direction)
+        {
+            int index = _tabControl.SelectedIndex;
+            if (index < 0) return;
+
+            var tab = TabAt(index);
+            if (tab == null) return;
+
+            int pinned = CountPinned();
+            int target = index + direction;
+
+            if (tab.IsPinned)
+            {
+                if (target < 0 || target > pinned - 1) return;
+            }
+            else if (target < pinned || target > _tabControl.TabPages.Count - 1)
+            {
+                return;
+            }
+
+            MoveTabTo(index, target);
+        }
+
+        /// <summary>Takes a page out of this window and gives it a window of its own.</summary>
+        private void MoveTabToNewWindow(int index)
+        {
+            var tab = TabAt(index);
+            if (tab == null) return;
+
+            string url = tab.CurrentUrl;
+            bool hasPage = !string.IsNullOrEmpty(url) && url != "about:home";
+
+            if (hasPage) NewWindowWith(url);
+            else NewWindow(false);
+
+            CloseTabAt(index);
+        }
+
+        /// <summary>
+        /// Saves every page this window is showing into one new folder, the way
+        /// "Bookmark All Tabs" works in other browsers.
+        /// </summary>
+        private void BookmarkAllTabs()
+        {
+            var titles = new List<string>();
+            var urls = new List<string>();
+
+            for (int i = 0; i < _tabControl.TabPages.Count; i++)
+            {
+                var tab = _tabControl.TabPages[i] as BrowserTab;
+                if (tab == null) continue;
+
+                string url = tab.CurrentUrl;
+                if (!IsBookmarkableUrl(url)) continue;
+
+                string title = tab.DisplayTitle;
+                if (string.IsNullOrEmpty(title)) title = url;
+
+                urls.Add(url);
+                titles.Add(title);
+            }
+
+            if (urls.Count == 0)
+            {
+                ChromeToast("There are no pages to bookmark");
+                return;
+            }
+
+            string suggested = "Tabs \u2013 " + DateTime.Now.ToString("d MMM yyyy",
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            using (var prompt = new TextPromptForm("Bookmark All Tabs",
+                "Name for the new folder:", suggested, "Save"))
+            {
+                if (prompt.ShowDialog(this) != DialogResult.OK) return;
+
+                string name = _bookmarkManager.UniqueChildName(string.Empty, prompt.Value);
+                string folder = _bookmarkManager.CreateFolder(string.Empty, name);
+                if (folder.Length == 0)
+                {
+                    ChromeToast("That folder name cannot be used");
+                    return;
+                }
+
+                for (int i = 0; i < urls.Count; i++)
+                {
+                    _bookmarkManager.AddBookmark(titles[i], urls[i], folder);
+                }
+            }
+
+            ChromeToast(urls.Count == 1
+                ? "Saved 1 tab to bookmarks"
+                : "Saved " + urls.Count + " tabs to bookmarks");
+        }
+
+        /// <summary>Internal pages and blank tabs are not worth a bookmark.</summary>
+        private static bool IsBookmarkableUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+            if (url == "about:home" || url == SettingsPage.Address) return false;
+
+            return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                || url.StartsWith("file:", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Right-clicking the empty part of the tab strip.</summary>
+        private void ShowTabStripMenu(int cssX, int cssY)
+        {
+            var menu = NewMenu();
+
+            menu.Items.Add(MenuAction("New Tab", delegate { AddNewTab(); }));
+
+            var reopen = MenuAction("Reopen Closed Tab", delegate { ReopenClosedTab(); });
+            reopen.Enabled = _closedTabs.Count > 0 || ClosedWindows.Count > 0;
+            menu.Items.Add(reopen);
+
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(MenuAction("Bookmark All Tabs\u2026", delegate { BookmarkAllTabs(); }));
+
+            var search = MenuAction("Search Tabs\u2026", delegate { ShowTabSearch(); });
+            search.Enabled = _tabControl.TabPages.Count > 1;
+            menu.Items.Add(search);
+
+            ShowChromeMenu(menu, cssX, cssY);
         }
 
         private void OnTabAudioChanged(BrowserTab tab)
@@ -1505,6 +1688,7 @@ namespace SimpleBrowser
 
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Bookmark This Page\u2026", null, delegate { AddBookmarkDialog(); }));
+            menu.Items.Add(new ToolStripMenuItem("Bookmark All Tabs\u2026", null, delegate { BookmarkAllTabs(); }));
             menu.Items.Add(new ToolStripMenuItem("Manage Bookmarks\u2026", null, delegate { ShowBookmarks(); }));
             menu.Items.Add(new ToolStripMenuItem("Export Bookmarks\u2026", null, delegate { ExportBookmarks(); }));
 
@@ -3370,6 +3554,8 @@ namespace SimpleBrowser
                     case 0x50: action = "print"; break;                            // Ctrl+P
                     case 0xBC: action = "settings"; break;                         // Ctrl+,
                     case 0x09: action = shift ? "prev_tab" : "next_tab"; break;    // Ctrl+Tab
+                    case 0x21: action = shift ? "move_tab_left" : "prev_tab"; break;   // Ctrl+PgUp
+                    case 0x22: action = shift ? "move_tab_right" : "next_tab"; break;  // Ctrl+PgDn
                     case 0xBB: action = "zoom_in"; break;                          // Ctrl++
                     case 0xBD: action = "zoom_out"; break;                         // Ctrl+-
                     case 0x30: action = "zoom_reset"; break;                       // Ctrl+0
@@ -3469,6 +3655,23 @@ namespace SimpleBrowser
         }
 
         /// <summary>
+        /// A right-click that landed on the tab strip's window-drag background.
+        /// Those pixels belong to the window frame, so the page never sees the
+        /// click and the command arrives as a non-client message instead.
+        /// </summary>
+        internal bool HandleStripRightClick(IntPtr lParam)
+        {
+            if (GetForegroundWindow() != Handle) return false;
+
+            Point at = PointToClient(new Point(lParam.ToInt32()));
+            if (at.X < 0 || at.X >= ClientSize.Width) return false;
+            if (at.Y < 0 || at.Y >= Dpi.Px(ChromeHtml.TabStripHeight)) return false;
+
+            ShowTabStripMenu((int)(at.X / Dpi.Scale), (int)(at.Y / Dpi.Scale));
+            return true;
+        }
+
+        /// <summary>
         /// Browser keys pressed in the page on show. Answering one marks it
         /// handled, which is what stops Chromium drawing its own find bar or
         /// reloading behind Toge's back; everything Toge does not claim keeps
@@ -3503,6 +3706,8 @@ namespace SimpleBrowser
                 case "forward": if (ActiveTab != null) ActiveTab.GoForward(); break;
                 case "next_tab": CycleTab(1); break;
                 case "prev_tab": CycleTab(-1); break;
+                case "move_tab_left": MoveActiveTab(-1); break;
+                case "move_tab_right": MoveActiveTab(1); break;
                 case "tab_last": SelectTabIndex(int.MaxValue); break;
                 case "tab_1": SelectTabIndex(0); break;
                 case "tab_2": SelectTabIndex(1); break;
@@ -4471,6 +4676,8 @@ namespace SimpleBrowser
             var bookmarksItem = new ToolStripMenuItem("Bookmark This Page\u2026", null, delegate { ToggleBookmarkCurrent(); });
             bookmarksItem.ShortcutKeyDisplayString = "Ctrl+D";
 
+            var bookmarkAllItem = new ToolStripMenuItem("Bookmark All Tabs\u2026", null, delegate { BookmarkAllTabs(); });
+
             var historyItem = new ToolStripMenuItem("History", null, delegate { ShowHistory(); });
             historyItem.ShortcutKeyDisplayString = "Ctrl+H";
 
@@ -4544,6 +4751,7 @@ namespace SimpleBrowser
             menu.Items.Add(downloadsItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(bookmarksItem);
+            menu.Items.Add(bookmarkAllItem);
             menu.Items.Add(allBookmarksItem);
             menu.Items.Add(bookmarksBarItem);
             menu.Items.Add(historyItem);
@@ -4709,6 +4917,25 @@ namespace SimpleBrowser
                 return;
             }
 
+            if (m.Msg == WM_NCRBUTTONUP)
+            {
+                // The empty tab strip is a window-drag region, so a right-click
+                // there never reaches the page. It arrives as a non-client
+                // message instead; draw the tab commands where the user
+                // clicked. Tabs and their buttons are no-drag and keep their
+                // own menus.
+                Point strip = PointToClient(new Point(m.LParam.ToInt32()));
+                if (strip.Y >= 0 && strip.Y < Dpi.Px(ChromeHtml.TabStripHeight)
+                    && strip.X >= 0 && strip.X < ClientSize.Width)
+                {
+                    ShowTabStripMenu(
+                        (int)(strip.X / Dpi.Scale),
+                        (int)(strip.Y / Dpi.Scale));
+                    m.Result = IntPtr.Zero;
+                    return;
+                }
+            }
+
             base.WndProc(ref m);
         }
 
@@ -4826,6 +5053,10 @@ namespace SimpleBrowser
             // Forward on every desktop mouse, and the page would only ignore
             // them. Caught before dispatch reaches any child control.
             if (m.Msg == 0x020B) return _form.HandleMouseButton(m.WParam, m.LParam);
+
+            // WM_NCRBUTTONUP: the tab strip's empty background is a
+            // window-drag region, so its right-click never reaches the page.
+            if (m.Msg == 0x00A5) return _form.HandleStripRightClick(m.LParam);
 
             // WM_KEYDOWN / WM_SYSKEYDOWN
             if (m.Msg != 0x0100 && m.Msg != 0x0104) return false;

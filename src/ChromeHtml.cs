@@ -372,6 +372,16 @@ namespace SimpleBrowser
         stroke-linecap: round;
     }
 
+    /* The empty stretch of the strip. A window-drag region never delivers a
+       right-click, so this piece keeps the drag region's look but answers
+       clicks itself and hands left presses back to the window. */
+    .stripfill {
+        flex: 1 1 auto;
+        align-self: stretch;
+        min-width: 8px;
+        -webkit-app-region: no-drag;
+    }
+
     /* A pill that marks a private window, so the two are never confused. */
     .priv {
         flex: none;
@@ -838,6 +848,8 @@ namespace SimpleBrowser
             <svg viewBox='0 0 24 24'><path d='M12 5.5v13M5.5 12h13'/></svg>
         </div>
 
+        <div class='stripfill' id='stripfill'></div>
+
         <div class='priv' id='priv' title='Private browsing'>
             <svg viewBox='0 0 24 24'><circle cx='7.4' cy='14' r='3.2'/><circle cx='16.6' cy='14' r='3.2'/><path d='M10.6 14h2.8'/><path d='M4.5 13.4 6.1 8.5h3.1'/><path d='M19.5 13.4 17.9 8.5h-3.1'/></svg>
             <span>Private</span>
@@ -1303,6 +1315,50 @@ namespace SimpleBrowser
     document.querySelector('.tabstrip').addEventListener('dblclick', function (e) {
         if (e.target === field || field.contains(e.target)) { return; }
         post('window_max');
+    });
+
+    // The empty stretch of the strip draws no chrome, but it still answers a
+    // right-click and doubles as a place to drag the window from.
+    var stripfill = document.getElementById('stripfill');
+    stripfill.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        post('strip_menu', { x: e.clientX, y: e.clientY });
+    });
+
+    var stripDown = null;
+    var stripDragging = false;
+
+    stripfill.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) { return; }
+        stripDown = { x: e.clientX, y: e.clientY };
+        stripDragging = false;
+    });
+
+    // The press only becomes a window drag once the pointer has really moved,
+    // so a plain click or a double-click is left to the page, which turns the
+    // double-click into the title-bar maximize.
+    stripfill.addEventListener('pointermove', function (e) {
+        if (!stripDown || stripDragging) { return; }
+        if (Math.abs(e.clientX - stripDown.x) < 4
+            && Math.abs(e.clientY - stripDown.y) < 4) { return; }
+
+        stripDragging = true;
+        post('window_drag');
+    });
+
+    stripfill.addEventListener('pointerup', function () {
+        stripDown = null;
+    });
+
+    // Right-clicking the empty part of the strip raises the tab commands a
+    // browser keeps there. A tab draws its own menu, so only the background
+    // answers here.
+    document.querySelector('.tabstrip').addEventListener('contextmenu', function (e) {
+        var target = e.target;
+        if (target && target.closest && target.closest('.tab')) { return; }
+        if (target && target.closest && target.closest('.newtab, .priv, .wctl')) { return; }
+        e.preventDefault();
+        post('strip_menu', { x: e.clientX, y: e.clientY });
     });
 
     // ── Bookmarks bar ────────────────────────────────────────────────────
